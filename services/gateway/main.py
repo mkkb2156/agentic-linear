@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI
 
@@ -75,5 +75,10 @@ app.include_router(github_router, prefix="/webhooks")
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, Any]:
+    dispatcher = app.state.dispatcher
+    return {
+        "status": "ok",
+        "agents_registered": len(dispatcher._registry),
+        "agents_active": dispatcher.active_count,
+    }

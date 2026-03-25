@@ -177,9 +177,71 @@ pytest tests/            # Run tests (23 passing)
 
 ---
 
+## Deployment Guide (Phase 5)
+
+### Step 1: Create Linear Custom Workflow States
+
+```bash
+LINEAR_API_KEY=lin_api_xxx python scripts/setup_linear.py
+```
+
+This creates 8 pipeline states in the Drone168 team:
+`Strategy Complete`, `Spec Complete`, `Architecture Complete`,
+`Implementation Done`, `QA Passed`, `Deployed`, `Deploy Complete`, `Alert Triggered`
+
+### Step 2: Deploy to Railway
+
+1. Create a Railway project, link to this GitHub repo
+2. Add environment variables:
+   - `LINEAR_API_KEY`, `LINEAR_WEBHOOK_SECRET`
+   - `ANTHROPIC_API_KEY`
+   - `DISCORD_BOT_TOKEN`
+   - `DISCORD_WEBHOOK_URL_AGENT_HUB`, `DISCORD_WEBHOOK_URL_DASHBOARD`
+   - `DISCORD_WEBHOOK_URL_ALERTS`, `DISCORD_WEBHOOK_URL_DEPLOY_LOG`
+3. Deploy — Railway will build from `Dockerfile` and expose the service
+4. Verify: `curl https://your-app.railway.app/health`
+
+### Step 3: Set up Discord Webhooks
+
+1. Create 4 webhooks in Discord server settings:
+   - `#agent-hub` → `DISCORD_WEBHOOK_URL_AGENT_HUB`
+   - `#dashboard` → `DISCORD_WEBHOOK_URL_DASHBOARD`
+   - `#alerts` → `DISCORD_WEBHOOK_URL_ALERTS`
+   - `#deploy-log` → `DISCORD_WEBHOOK_URL_DEPLOY_LOG`
+2. Add URLs to Railway environment variables
+
+### Step 4: Create Linear Webhook
+
+```bash
+LINEAR_API_KEY=lin_api_xxx \
+GATEWAY_URL=https://your-app.railway.app \
+LINEAR_WEBHOOK_SECRET=your-secret \
+python scripts/setup_linear.py
+```
+
+Or manually: Linear Settings → API → Webhooks → Create:
+- URL: `https://your-app.railway.app/webhooks/linear`
+- Secret: same as `LINEAR_WEBHOOK_SECRET` env var
+- Events: Issue status changes
+
+### Step 5: E2E Integration Test
+
+```bash
+# Test against deployed gateway
+python scripts/test_e2e.py https://your-app.railway.app
+
+# Test against local
+python scripts/test_e2e.py http://localhost:8000
+```
+
+Tests: health check, webhook delivery, idempotency, signature validation, DAG enforcement.
+
+---
+
 ## Linear Project
 
 **Project:** Drone168 Dev Pipeline (In Progress)
 **Milestones:** M1-M10 (one per pipeline stage)
 **Platform Issues:** DRO-15 (Done), DRO-16 (Done), DRO-17 (Done)
+**Next:** DRO-18 (Phase 5: Deploy + Integration Test)
 **Pipeline Issues:** DRO-5~14 (Todo, with blocking relations)
