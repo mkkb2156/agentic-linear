@@ -262,6 +262,11 @@ class BaseAgent:
         is_complete=True when complete_task is called.
         """
         try:
+            # Auto-resolve issue_id: Claude often passes identifier (DRO-20)
+            # but Linear API needs UUID. Override with tracked UUID.
+            if "issue_id" in tool_input and issue_id:
+                tool_input["issue_id"] = issue_id
+
             if tool_name == "linear_update_issue":
                 return await self._tool_linear_update(tool_input), False
 
@@ -315,7 +320,9 @@ class BaseAgent:
         if "description" in inp:
             kwargs["description"] = inp["description"]
         if "parent_id" in inp:
-            kwargs["parentId"] = inp["parent_id"]
+            # Use tracked UUID if Claude passed the identifier (e.g. DRO-20)
+            parent = inp["parent_id"]
+            kwargs["parentId"] = issue_id if issue_id and not self._is_uuid(parent) else parent
 
         # Resolve team_id from the current issue's team context
         team_id = await self._resolve_team_id(issue_id)
@@ -331,6 +338,12 @@ class BaseAgent:
             "success": result.get("success", False),
             "issue": result.get("issue", {}),
         }
+
+    @staticmethod
+    def _is_uuid(value: str) -> bool:
+        """Check if a string looks like a UUID."""
+        import re
+        return bool(re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", value))
 
     async def _resolve_team_id(self, issue_id: str) -> str:
         """Get team ID from the current issue's context."""
