@@ -38,23 +38,25 @@ One Railway service (`gateway`) handles everything:
 
 ---
 
-## 10 Agents
+## 11 Agents
 
 | # | Agent | Role | Trigger Status | Output |
 |---|-------|------|---------------|--------|
-| 1 | 🎯 Product Strategist | PRD 撰寫 | (manual start) | Strategy Complete |
-| 2 | 📐 Spec Architect | 技術規格 | Strategy Complete | Spec Complete |
-| 3 | 🏗️ System Architect | 系統架構 (Opus) | Spec Complete | Architecture Complete |
-| 4 | ⚛️ Frontend Engineer | 前端開發 | Architecture Complete | Implementation Done |
-| 5 | 🔧 Backend Engineer | 後端開發 | Architecture Complete | Implementation Done |
-| 6 | 🧪 QA Engineer | 測試品質 | Implementation Done | QA Passed |
-| 7 | 🚀 DevOps | CI/CD 部署 | QA Passed | Deployed |
-| 8 | 📋 Release Manager | 版本發行 | Deployed | Deploy Complete |
-| 9 | 🖥️ Infra Ops | 基礎設施 | Alert Triggered | — |
-| 10 | ☁️ Cloud Ops | 雲端營運 | Deploy Complete | — |
+| 1 | 🎯 策略師 | PRD 撰寫 | (manual / Discord) | Strategy Complete |
+| 2 | 📐 規格師 | 技術規格 | Strategy Complete | Spec Complete |
+| 3 | 🏗️ 架構師 | 系統架構 (Opus) | Spec Complete | Architecture Complete |
+| 4 | ⚛️ 前端工程師 | 前端開發 | Architecture Complete | Implementation Done |
+| 5 | 🔧 後端工程師 | 後端開發 | Architecture Complete | Implementation Done |
+| 6 | 🧪 測試工程師 | 測試品質 | Implementation Done | QA Passed |
+| 7 | 🚀 部署官 | CI/CD 部署 | QA Passed | Deployed |
+| 8 | 📋 發版管理 | 版本發行 | Deployed | Deploy Complete |
+| 9 | 🖥️ 維運官 | 基礎設施 | Alert Triggered | — |
+| 10 | ☁️ 雲端官 | 雲端營運 | Deploy Complete | — |
+| 11 | 🛡️ 管理官 | Admin (metrics, skills, learning) | /admin 或自動觸發 | — |
 
 Agents 4+5 run in parallel after Architecture Complete.
 Agents 9+10 are continuous (triggered by events, not the main pipeline).
+Agent 11 (Admin) is outside the DAG — triggered manually or every 10 agent runs.
 
 ---
 
@@ -83,7 +85,7 @@ Alert Triggered → Infra Ops
 - Docker / docker-compose / Railway config
 
 ### ✅ Phase 2-4 — Agent Framework + All 10 Agents (Complete)
-- `BaseAgent` class with Claude Tool Use agentic loop
+- `BaseAgent` class with Claude Tool Use agentic loop (max 15 turns)
 - 6 tool definitions (Linear CRUD, Discord notify, complete_task)
 - All 10 agents with role-specific system prompts
 - Real Linear API: state lookup by name, status transitions, comment history
@@ -93,23 +95,37 @@ Alert Triggered → Infra Ops
 - Removed: asyncpg, SKIP LOCKED queue, 4 worker services, migrations
 - Added: `AgentDispatcher` (asyncio background tasks + in-memory idempotency)
 - Consolidated from 5 services → 1 service (gateway)
-- 23 tests passing
 
-### 🔲 Phase 5 — Deployment & Integration (Next)
-- [ ] Add custom Linear workflow states (Strategy Complete, Spec Complete, etc.)
-- [ ] Deploy gateway to Railway
-- [ ] Set up Discord webhooks (agent_hub, dashboard, alerts, deploy_log)
-- [ ] Configure environment variables on Railway
-- [ ] End-to-end integration test with real Linear issue
-- [ ] Set up GitHub webhook for PR events
+### ✅ Phase 5 — Deployment & Integration (Complete)
+- 8 custom Linear workflow states created (setup_linear.py)
+- Railway deployed: `agentic-linear.up.railway.app`
+- Linear webhook → Railway gateway
+- Discord 4 webhooks + per-agent avatar personas (DiceBear)
+- E2E test 5/5 passing
+- Pipeline 端到端驗證: DRO-19 (Todo App) + DRO-20 (Skills System) — 全 pipeline 自動完成
 
-### 🔲 Phase 6 — Production Hardening
-- [ ] Structured logging (JSON) for Railway log aggregation
-- [ ] Token budget tracking per issue (daily/weekly reports)
-- [ ] Rate limit handling for Linear API (pagination, throttling)
-- [ ] Graceful shutdown (wait for active agents before exit)
-- [ ] Health check with active agent count
-- [ ] Error recovery: agent retry with exponential backoff
+### ✅ Phase 6 — Production Bug Fixes (Complete)
+- Fix: router handles real Linear webhook format (flat stateId in updatedFrom)
+- Fix: auto-resolve issue UUID in all tool calls (Claude sends DRO-20, API needs UUID)
+- Fix: resolve teamId from issue context for sub-issue creation
+- Fix: configure Python root logger (all app logs were silently dropped)
+- Fix: increase max_tokens 4096→16384 + nudge Claude to use tools when it responds with text
+- 25 tests passing
+
+### ✅ Phase 7 — Discord Commands + GitHub Integration (Complete)
+- Discord slash commands: `/project`, `/run`, `/status`, `/agent`
+- GitHub API client: create_branch, push_file, get_file, create_pull_request
+- Dynamic repo management: list_repos, create_repo, find_or_create_repo
+- Agent tools: github_create_pr, github_read_file, github_list_repos, github_create_repo
+- Config: github_token, github_repo_owner, vercel_token, supabase_access_token
+
+### 🔨 Phase 8 — Admin Agent + Self-Learning (In Progress)
+- [ ] Metrics persistence (AgentRunRecord + MetricsStore → data/metrics.json)
+- [ ] Agent Config system (claude.md + skills/*.md + agents/*.yaml)
+- [ ] Skills loading in BaseAgent (auto-enhanced system prompts)
+- [ ] Admin Agent (#11) — query metrics, manage configs, generate reports
+- [ ] Self-learning loop (capture → trigger every 10 runs → Admin analyzes + optimizes)
+- [ ] /admin Discord command (report / config / learn)
 
 ---
 
@@ -155,9 +171,20 @@ shared/
   tools.py               → Tool definitions for Claude Tool Use
   claude_client.py       → Anthropic API client
   linear_client.py       → Linear GraphQL client
+  github_client.py       → GitHub REST API client
   discord_notifier.py    → Discord webhook notifier
   models.py              → AgentRole, pipeline DAG, webhook models
   config.py              → Settings (env vars)
+  metrics.py             → MetricsStore (Phase 8)
+  agent_config.py        → AgentConfigManager (Phase 8)
+  agent_config/
+    claude.md            → 全域最高規範
+    skills/              → 領域知識 .md 文件
+    agents/              → Per-agent YAML 配置
+    learnings/           → 學習紀錄
+scripts/
+  setup_linear.py        → 建立 workflow states + webhook
+  test_e2e.py            → E2E 整合測試
 tests/
   test_webhook_signature.py
   test_router.py
@@ -238,10 +265,22 @@ Tests: health check, webhook delivery, idempotency, signature validation, DAG en
 
 ---
 
-## Linear Project
+## Linear Projects
 
-**Project:** Drone168 Dev Pipeline (In Progress)
+### Drone168 Dev Pipeline
+**Status:** In Progress
 **Milestones:** M1-M10 (one per pipeline stage)
 **Platform Issues:** DRO-15 (Done), DRO-16 (Done), DRO-17 (Done), DRO-18 (Done)
-**Pipeline Issues:** DRO-5~14 (Todo, with blocking relations)
-**Gateway:** `agentic-linear.up.railway.app`
+**Pipeline Issues:** DRO-5~14 (M1~M10, Todo)
+**Test Issues:** DRO-19 (Todo App, Done), DRO-20 (Skills System, Pipeline Complete)
+
+### Agent Skills & Config System
+**Status:** In Progress
+**Milestones:** M1~M6
+**Issue:** DRO-20 (Pipeline complete — 8 agents produced full design docs)
+**Next:** Implement Admin Agent + Skills engine (Phase 8)
+
+### Gateway
+**URL:** `agentic-linear.up.railway.app`
+**Health:** `/health` → agents_registered: 10, agents_active: N
+**Discord:** `/project`, `/run`, `/status`, `/agent`

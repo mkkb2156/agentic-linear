@@ -148,6 +148,62 @@ def setup_commands(bot: commands.Bot) -> None:
             logger.exception("Failed to check status: %s", e)
             await interaction.followup.send(f"查詢失敗: {e}", ephemeral=True)
 
+    @bot.tree.command(name="admin", description="管理平台 — 報告/配置/學習分析")
+    @app_commands.describe(
+        action="操作類型: report / config / learn",
+        detail="補充細節 (可選)",
+    )
+    async def admin_command(
+        interaction: discord.Interaction,
+        action: str,
+        detail: str | None = None,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            prompt_map = {
+                "report": "產出本週 Agent 績效報告（含各 agent 成功率、token 消耗、平均執行時間），發布到 Discord #dashboard。",
+                "config": "列出所有 agent 的當前配置，包含模型、技能、最大輪次、啟用狀態。",
+                "learn": "檢視學習紀錄和 metrics，分析模式和優化機會，必要時更新 skill 文件。將分析報告發布到 Discord #dashboard。",
+            }
+            prompt = prompt_map.get(action)
+            if not prompt:
+                await interaction.followup.send(
+                    f"未知的操作: `{action}`\n可用: report, config, learn",
+                    ephemeral=True,
+                )
+                return
+
+            if detail:
+                prompt += f"\n補充: {detail}"
+
+            task = AgentTask(
+                issue_id=f"admin-{uuid.uuid4().hex[:8]}",
+                agent_role="admin",
+                payload={
+                    "prompt": prompt,
+                    "_metrics_store": getattr(bot, "metrics_store", None),
+                    "_config_manager": getattr(bot, "config_manager", None),
+                },
+            )
+
+            dispatcher = bot.dispatcher  # type: ignore[attr-defined]
+            dispatched = await dispatcher.dispatch(AgentRole.ADMIN, task)
+
+            if dispatched:
+                await interaction.followup.send(
+                    f"已派遣管理官處理 `{action}` 請求。結果將發布至 Discord。",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(
+                    "無法派遣管理官，可能未註冊或重複請求。",
+                    ephemeral=True,
+                )
+        except Exception as e:
+            logger.exception("Failed to dispatch admin: %s", e)
+            await interaction.followup.send(f"管理操作失敗: {e}", ephemeral=True)
+
     @bot.tree.command(name="agent", description="直接對特定 Agent 發送提示")
     @app_commands.describe(agent_name="Agent 名稱", prompt="提示內容")
     async def agent_prompt(

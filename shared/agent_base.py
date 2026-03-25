@@ -86,6 +86,11 @@ class BaseAgent:
         issue_uuid = issue.get("id", payload.get("event", {}).get("data", {}).get("id", ""))
         logger.info("[%s] issue_id=%s, issue_uuid=%s", self.role, issue_id, issue_uuid)
 
+        # Load config-enhanced system prompt (claude.md + skills + base)
+        from shared.agent_config import get_config_manager
+        config_mgr = get_config_manager()
+        effective_prompt = config_mgr.build_system_prompt(str(self.role), self.system_prompt)
+
         # Notify Discord that we're starting
         await self.discord.send_task_started(
             agent_role=self.role,
@@ -104,7 +109,7 @@ class BaseAgent:
         for turn in range(MAX_TURNS):
             response, tokens, model = await self.claude.execute(
                 agent_role=self.role,
-                system_prompt=self.system_prompt,
+                system_prompt=effective_prompt,
                 messages=messages,
                 tools=self.tools,
             )

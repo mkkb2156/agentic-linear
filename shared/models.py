@@ -17,6 +17,7 @@ class AgentRole(StrEnum):
     RELEASE_MANAGER = "release_manager"
     INFRA_OPS = "infra_ops"
     CLOUD_OPS = "cloud_ops"
+    ADMIN = "admin"
 
 
 class LinearWebhookPayload(BaseModel):
@@ -155,5 +156,11 @@ AGENT_IDENTITIES: dict[AgentRole, dict[str, str]] = {
         "emoji": "☁️",
         "color": "#448AFF",
         "avatar_url": f"{_AVATAR_BASE}cloud-ops&backgroundColor=448AFF",
+    },
+    AgentRole.ADMIN: {
+        "name": "🛡️ 管理官",
+        "emoji": "🛡️",
+        "color": "#FFD700",
+        "avatar_url": f"{_AVATAR_BASE}admin&backgroundColor=FFD700",
     },
 }

@@ -22,6 +22,8 @@ def create_bot(
     discord_notifier: Any = None,
     dispatcher: Any = None,
     github_client: Any = None,
+    metrics_store: Any = None,
+    config_manager: Any = None,
 ) -> commands.Bot:
     intents = discord.Intents.default()
     intents.guilds = True
@@ -35,6 +37,8 @@ def create_bot(
     bot.discord_notifier = discord_notifier  # type: ignore[attr-defined]
     bot.dispatcher = dispatcher  # type: ignore[attr-defined]
     bot.github_client = github_client  # type: ignore[attr-defined]
+    bot.metrics_store = metrics_store  # type: ignore[attr-defined]
+    bot.config_manager = config_manager  # type: ignore[attr-defined]
 
     @bot.event
     async def on_ready() -> None:
@@ -58,6 +62,8 @@ async def start_bot(
     discord_notifier: Any = None,
     dispatcher: Any = None,
     github_client: Any = None,
+    metrics_store: Any = None,
+    config_manager: Any = None,
 ) -> None:
     global _bot, _bot_task
     _bot = create_bot(
@@ -66,6 +72,8 @@ async def start_bot(
         discord_notifier=discord_notifier,
         dispatcher=dispatcher,
         github_client=github_client,
+        metrics_store=metrics_store,
+        config_manager=config_manager,
     )
     _bot_task = asyncio.create_task(_bot.start(token))
     logger.info("Discord bot starting...")
