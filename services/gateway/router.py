@@ -43,13 +43,22 @@ class EventRouter:
 
         # Extract status change
         new_state = _get_nested(event.data, "state", "name")
-        old_state = _get_nested(event.updated_from or {}, "state", "name") if event.updated_from else None
-
-        if not new_state or not old_state:
+        if not new_state:
             return 0
 
-        # DAG enforcement: only allow forward transitions
-        if not self._is_forward_transition(old_state, new_state):
+        # Linear updatedFrom contains flat fields (e.g. "stateId") not nested objects.
+        # Try nested first (for tests), then fall back to checking if stateId changed.
+        old_state = _get_nested(event.updated_from or {}, "state", "name")
+        if not old_state:
+            # If updatedFrom has stateId, a status change occurred — but we don't have the name.
+            # Skip DAG enforcement in this case; still dispatch the agent.
+            updated_from = event.updated_from or {}
+            if "stateId" not in updated_from and "state" not in updated_from:
+                # No status change at all — ignore
+                return 0
+
+        # DAG enforcement: only allow forward transitions (when both states are known)
+        if old_state and not self._is_forward_transition(old_state, new_state):
             logger.warning(
                 "Blocked backward transition: %s → %s",
                 old_state,

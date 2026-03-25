@@ -144,3 +144,45 @@ async def test_all_pipeline_transitions(
         event = _make_event(old, new)
         count = await router.route(event)
         assert count == expected_count, f"Failed for {old} → {new}: expected {expected_count}, got {count}"
+
+
+@pytest.mark.asyncio
+async def test_real_linear_webhook_format_with_stateId(
+    router: EventRouter, mock_dispatcher: AsyncMock
+) -> None:
+    """Real Linear webhooks send flat stateId in updatedFrom, not nested state.name."""
+    event = LinearWebhookPayload(
+        action="update",
+        type="Issue",
+        data={
+            "id": "issue-uuid",
+            "identifier": "DRO-19",
+            "state": {"id": "new-state-uuid", "name": "Strategy Complete"},
+        },
+        updatedFrom={"stateId": "old-state-uuid", "updatedAt": "2026-03-25T00:00:00Z"},
+    )
+    count = await router.route(event, delivery_id="real-webhook-1")
+
+    assert count == 1
+    call_kwargs = mock_dispatcher.dispatch.call_args.kwargs
+    assert call_kwargs["agent_role"] == AgentRole.SPEC_ARCHITECT
+
+
+@pytest.mark.asyncio
+async def test_no_state_change_ignored(
+    router: EventRouter, mock_dispatcher: AsyncMock
+) -> None:
+    """If updatedFrom has no stateId or state, it's not a status change."""
+    event = LinearWebhookPayload(
+        action="update",
+        type="Issue",
+        data={
+            "id": "issue-uuid",
+            "identifier": "DRO-19",
+            "state": {"id": "state-uuid", "name": "Strategy Complete"},
+        },
+        updatedFrom={"title": "Old Title"},  # title change, not status
+    )
+    count = await router.route(event)
+    assert count == 0
+    mock_dispatcher.dispatch.assert_not_called()
