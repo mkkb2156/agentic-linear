@@ -140,10 +140,23 @@ class BaseAgent:
                     }
                     break
             else:
-                # Claude responded with text only (no more tool calls)
+                # Claude responded with text only (no tool calls)
                 text = "".join(
                     b.text for b in response.content if hasattr(b, "text")
                 )
+
+                # If this is an early turn and Claude described actions instead
+                # of executing them, nudge it to use tools
+                if turn < MAX_TURNS - 2:
+                    logger.info("[%s] Text response at turn %d, nudging to use tools: %s", self.role, turn, text[:200])
+                    messages.append({"role": "assistant", "content": response.content})
+                    messages.append({"role": "user", "content": (
+                        "請不要描述你要做什麼，直接使用工具執行。"
+                        "使用 linear_add_comment 發布你的分析結果，"
+                        "然後呼叫 complete_task 完成任務。"
+                    )})
+                    continue
+
                 logger.info("[%s] Final response: %s", self.role, text[:200])
                 result = {
                     "summary": text[:500],
