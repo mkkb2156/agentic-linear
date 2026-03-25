@@ -7,7 +7,14 @@ Linear is the source of truth for all task/issue management.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
+
+# Configure root logger so all application loggers output to stdout
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI
