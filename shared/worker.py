@@ -17,9 +17,11 @@ from shared.queue import TaskQueue
 
 logger = logging.getLogger(__name__)
 
+AgentResult = dict[str, Any]
+
 AgentHandler = Callable[
     [asyncpg.Record, ClaudeClient, LinearClient, DiscordNotifier],
-    Awaitable[None],
+    Awaitable[AgentResult | None],
 ]
 
 
@@ -100,8 +102,10 @@ class BaseWorker:
 
         logger.info("Processing task %s with agent %s", task_id, agent_role)
         try:
-            await handler(task, claude_client, linear_client, discord_notifier)
-            await task_queue.complete(task_id)
+            result = await handler(task, claude_client, linear_client, discord_notifier)
+            tokens_used = (result or {}).get("tokens_used", 0)
+            model_used = (result or {}).get("model_used")
+            await task_queue.complete(task_id, tokens_used=tokens_used, model_used=model_used)
         except Exception as e:
             logger.exception("Task %s failed: %s", task_id, e)
             new_status = await task_queue.fail(task_id, str(e))
