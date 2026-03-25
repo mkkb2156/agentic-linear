@@ -242,6 +242,6 @@ Tests: health check, webhook delivery, idempotency, signature validation, DAG en
 
 **Project:** Drone168 Dev Pipeline (In Progress)
 **Milestones:** M1-M10 (one per pipeline stage)
-**Platform Issues:** DRO-15 (Done), DRO-16 (Done), DRO-17 (Done)
-**Next:** DRO-18 (Phase 5: Deploy + Integration Test)
+**Platform Issues:** DRO-15 (Done), DRO-16 (Done), DRO-17 (Done), DRO-18 (Done)
 **Pipeline Issues:** DRO-5~14 (Todo, with blocking relations)
+**Gateway:** `agentic-linear.up.railway.app`
