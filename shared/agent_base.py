@@ -79,6 +79,8 @@ class BaseAgent:
         # Fetch full issue context from Linear
         issue = await self._fetch_issue_context(payload)
         issue_title = issue.get("title", "Unknown")
+        # Track the UUID for API calls (different from identifier like DRO-19)
+        issue_uuid = issue.get("id", payload.get("event", {}).get("data", {}).get("id", ""))
 
         # Notify Discord that we're starting
         await self.discord.send_task_started(
@@ -114,7 +116,7 @@ class BaseAgent:
                 for block in response.content:
                     if block.type == "tool_use":
                         tool_result, is_complete = await self._handle_tool_call(
-                            block.name, block.input, issue_id
+                            block.name, block.input, issue_uuid
                         )
                         tool_results.append({
                             "type": "tool_result",
@@ -244,6 +246,10 @@ class BaseAgent:
             "1. Analyze the issue and perform your role's responsibilities",
             "2. Post your deliverables as a comment on the issue",
             "3. Call `complete_task` with a summary and the next pipeline status",
+            "",
+            "### Language Requirement",
+            "你必須使用繁體中文回覆所有 Linear comment 和 Discord 通知。",
+            "技術術語可保留英文，但描述和分析請使用中文。",
         ])
 
         return "\n".join(parts)
@@ -263,7 +269,7 @@ class BaseAgent:
                 return await self._tool_linear_comment(tool_input), False
 
             elif tool_name == "linear_create_issue":
-                return await self._tool_linear_create(tool_input), False
+                return await self._tool_linear_create(tool_input, issue_id), False
 
             elif tool_name == "linear_query_issues":
                 return await self._tool_linear_query(tool_input), False
@@ -302,15 +308,22 @@ class BaseAgent:
         result = await self.linear.add_comment(inp["issue_id"], inp["body"])
         return {"success": result.get("success", False)}
 
-    async def _tool_linear_create(self, inp: dict[str, Any]) -> dict[str, Any]:
+    async def _tool_linear_create(
+        self, inp: dict[str, Any], issue_id: str = ""
+    ) -> dict[str, Any]:
         kwargs: dict[str, Any] = {}
         if "description" in inp:
             kwargs["description"] = inp["description"]
         if "parent_id" in inp:
             kwargs["parentId"] = inp["parent_id"]
 
+        # Resolve team_id from the current issue's team context
+        team_id = await self._resolve_team_id(issue_id)
+        if not team_id:
+            return {"error": "Could not resolve team ID from issue context"}
+
         result = await self.linear.create_issue(
-            team_id="",  # Needs to be configured per workspace
+            team_id=team_id,
             title=inp["title"],
             **kwargs,
         )
@@ -318,6 +331,21 @@ class BaseAgent:
             "success": result.get("success", False),
             "issue": result.get("issue", {}),
         }
+
+    async def _resolve_team_id(self, issue_id: str) -> str:
+        """Get team ID from the current issue's context."""
+        if hasattr(self, "_cached_team_id") and self._cached_team_id:
+            return self._cached_team_id
+        try:
+            data = await self.linear._graphql("""
+                query($id: String!) { issue(id: $id) { team { id } } }
+            """, {"id": issue_id})
+            team_id = data.get("issue", {}).get("team", {}).get("id", "")
+            self._cached_team_id = team_id
+            return team_id
+        except Exception as e:
+            logger.error("Failed to resolve team ID: %s", e)
+            return ""
 
     async def _tool_linear_query(self, inp: dict[str, Any]) -> dict[str, Any]:
         filter_input: dict[str, Any] = {}
