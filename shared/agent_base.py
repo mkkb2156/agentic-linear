@@ -11,6 +11,7 @@ from typing import Any
 
 from shared.claude_client import ClaudeClient
 from shared.discord_notifier import DiscordNotifier
+from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
 from shared.models import AgentRole
 
@@ -58,10 +59,12 @@ class BaseAgent:
         claude_client: ClaudeClient,
         linear_client: LinearClient,
         discord_notifier: DiscordNotifier,
+        github_client: GitHubClient | None = None,
     ) -> None:
         self.claude = claude_client
         self.linear = linear_client
         self.discord = discord_notifier
+        self.github = github_client
 
     async def run(self, task: AgentTask) -> dict[str, Any]:
         """
@@ -302,6 +305,18 @@ class BaseAgent:
             elif tool_name == "discord_notify":
                 return await self._tool_discord_notify(tool_input), False
 
+            elif tool_name == "github_list_repos":
+                return await self._tool_github_list_repos(tool_input), False
+
+            elif tool_name == "github_create_repo":
+                return await self._tool_github_create_repo(tool_input), False
+
+            elif tool_name == "github_create_pr":
+                return await self._tool_github_create_pr(tool_input), False
+
+            elif tool_name == "github_read_file":
+                return await self._tool_github_read_file(tool_input), False
+
             elif tool_name == "complete_task":
                 return tool_input, True
 
@@ -400,6 +415,69 @@ class BaseAgent:
             },
         )
         return {"success": True}
+
+    async def _tool_github_list_repos(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        search = inp.get("search", "")
+        if search:
+            repos = await self.github.search_repos(search)
+        else:
+            repos = await self.github.list_repos()
+        return {
+            "repos": [
+                {"name": r["name"], "full_name": r["full_name"], "description": r.get("description", "")}
+                for r in repos[:20]
+            ]
+        }
+
+    async def _tool_github_create_repo(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        repo = await self.github.find_or_create_repo(
+            name=inp["name"],
+            description=inp.get("description", ""),
+            private=inp.get("private", False),
+        )
+        return {
+            "success": True,
+            "full_name": repo.get("full_name", ""),
+            "html_url": repo.get("html_url", ""),
+            "created": repo.get("created_at", ""),
+        }
+
+    async def _tool_github_create_pr(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        repo = inp["repo"]
+        branch_name = inp["branch_name"]
+
+        await self.github.create_branch(repo, branch_name)
+
+        for f in inp["files"]:
+            await self.github.push_file(
+                repo=repo,
+                path=f["path"],
+                content=f["content"],
+                message=f"feat: {inp['title']} — {f['path']}",
+                branch=branch_name,
+            )
+
+        pr = await self.github.create_pull_request(
+            repo=repo,
+            title=inp["title"],
+            body=inp.get("body", ""),
+            head=branch_name,
+        )
+        return {"success": True, "pr_url": pr.get("html_url", ""), "pr_number": pr.get("number")}
+
+    async def _tool_github_read_file(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        repo = inp["repo"]
+        branch = inp.get("branch", "main")
+        data = await self.github.get_file(repo, inp["path"], branch)
+        return {"path": inp["path"], "content": data.get("decoded_content", "")}
 
     async def _transition_status(
         self, issue_id: str, payload: dict[str, Any], next_status: str

@@ -129,6 +129,97 @@ TOOL_COMPLETE_TASK = {
     },
 }
 
+TOOL_GITHUB_CREATE_REPO = {
+    "name": "github_create_repo",
+    "description": (
+        "Find an existing GitHub repo or create a new one. "
+        "Use this before github_create_pr if you need to set up a new project repo."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Repository name (e.g. 'my-todo-app')",
+            },
+            "description": {
+                "type": "string",
+                "description": "Repository description",
+            },
+            "private": {
+                "type": "boolean",
+                "description": "Whether the repo should be private (default: false)",
+            },
+        },
+        "required": ["name"],
+    },
+}
+
+TOOL_GITHUB_CREATE_PR = {
+    "name": "github_create_pr",
+    "description": "Create a GitHub pull request with code changes on a specific repo.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "repo": {
+                "type": "string",
+                "description": "Repository name (e.g. 'my-todo-app' or 'owner/my-todo-app')",
+            },
+            "branch_name": {"type": "string", "description": "New branch name"},
+            "title": {"type": "string", "description": "PR title"},
+            "body": {"type": "string", "description": "PR description"},
+            "files": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path in repo"},
+                        "content": {"type": "string", "description": "File content"},
+                    },
+                    "required": ["path", "content"],
+                },
+                "description": "Files to create/update",
+            },
+        },
+        "required": ["repo", "branch_name", "title", "files"],
+    },
+}
+
+TOOL_GITHUB_READ_FILE = {
+    "name": "github_read_file",
+    "description": "Read a file from a GitHub repository.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "repo": {
+                "type": "string",
+                "description": "Repository name (e.g. 'my-todo-app' or 'owner/my-todo-app')",
+            },
+            "path": {"type": "string", "description": "File path in repo"},
+            "branch": {
+                "type": "string",
+                "description": "Branch to read from (default: main)",
+            },
+        },
+        "required": ["repo", "path"],
+    },
+}
+
+TOOL_GITHUB_LIST_REPOS = {
+    "name": "github_list_repos",
+    "description": "List available GitHub repositories. Use to find existing repos before creating new ones.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "search": {
+                "type": "string",
+                "description": "Optional search query to filter repos by name",
+            },
+        },
+        "required": [],
+    },
+}
+
 # Tool sets per agent type
 PLANNING_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
@@ -144,6 +235,10 @@ BUILD_TOOLS = [
     TOOL_LINEAR_ADD_COMMENT,
     TOOL_LINEAR_CREATE_ISSUE,
     TOOL_DISCORD_NOTIFY,
+    TOOL_GITHUB_LIST_REPOS,
+    TOOL_GITHUB_CREATE_REPO,
+    TOOL_GITHUB_CREATE_PR,
+    TOOL_GITHUB_READ_FILE,
     TOOL_COMPLETE_TASK,
 ]
 
