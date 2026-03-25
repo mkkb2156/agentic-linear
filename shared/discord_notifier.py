@@ -43,6 +43,7 @@ class DiscordNotifier:
         identity = AGENT_IDENTITIES.get(agent_role, {})
         payload: dict[str, Any] = {
             "username": identity.get("name", str(agent_role)),
+            "avatar_url": identity.get("avatar_url", ""),
             "embeds": [self._build_embed(agent_role, embed_data)],
         }
 
@@ -72,11 +73,15 @@ class DiscordNotifier:
         color_hex = identity.get("color", "#808080").lstrip("#")
         color_int = int(color_hex, 16)
 
+        author: dict[str, str] = {
+            "name": identity.get("name", str(agent_role)),
+        }
+        if identity.get("avatar_url"):
+            author["icon_url"] = identity["avatar_url"]
+
         embed: dict[str, Any] = {
             "color": color_int,
-            "author": {
-                "name": identity.get("name", str(agent_role)),
-            },
+            "author": author,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 

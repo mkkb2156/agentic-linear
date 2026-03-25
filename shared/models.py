@@ -91,56 +91,69 @@ PIPELINE_ORDER: list[str] = [
 ]
 
 
-# Agent identity for Discord
+# Agent identity for Discord (name, emoji, color, avatar_url)
+# Avatars use DiceBear Bottts style — deterministic, unique per agent
+_AVATAR_BASE = "https://api.dicebear.com/9.x/bottts/png?seed="
+
 AGENT_IDENTITIES: dict[AgentRole, dict[str, str]] = {
     AgentRole.PRODUCT_STRATEGIST: {
         "name": "🎯 策略師",
         "emoji": "🎯",
         "color": "#003232",
+        "avatar_url": f"{_AVATAR_BASE}strategist&backgroundColor=003232",
     },
     AgentRole.SPEC_ARCHITECT: {
         "name": "📐 規格師",
         "emoji": "📐",
         "color": "#4ECDC4",
+        "avatar_url": f"{_AVATAR_BASE}spec-architect&backgroundColor=4ECDC4",
     },
     AgentRole.SYSTEM_ARCHITECT: {
         "name": "🏗️ 架構師",
         "emoji": "🏗️",
         "color": "#7C4DFF",
+        "avatar_url": f"{_AVATAR_BASE}system-architect&backgroundColor=7C4DFF",
     },
     AgentRole.FRONTEND_ENGINEER: {
         "name": "⚛️ 前端工程師",
         "emoji": "⚛️",
         "color": "#00E676",
+        "avatar_url": f"{_AVATAR_BASE}frontend-engineer&backgroundColor=00E676",
     },
     AgentRole.BACKEND_ENGINEER: {
         "name": "🔧 後端工程師",
         "emoji": "🔧",
         "color": "#FF6E40",
+        "avatar_url": f"{_AVATAR_BASE}backend-engineer&backgroundColor=FF6E40",
     },
     AgentRole.QA_ENGINEER: {
         "name": "🧪 測試工程師",
         "emoji": "🧪",
         "color": "#FF4081",
+        "avatar_url": f"{_AVATAR_BASE}qa-engineer&backgroundColor=FF4081",
     },
     AgentRole.DEVOPS: {
         "name": "🚀 部署官",
         "emoji": "🚀",
         "color": "#FFD740",
+        "avatar_url": f"{_AVATAR_BASE}devops&backgroundColor=FFD740",
     },
     AgentRole.RELEASE_MANAGER: {
         "name": "📋 發版管理",
         "emoji": "📋",
         "color": "#B388FF",
+        "avatar_url": f"{_AVATAR_BASE}release-manager&backgroundColor=B388FF",
     },
     AgentRole.INFRA_OPS: {
         "name": "🖥️ 維運官",
         "emoji": "🖥️",
         "color": "#69F0AE",
+        "avatar_url": f"{_AVATAR_BASE}infra-ops&backgroundColor=69F0AE",
     },
     AgentRole.CLOUD_OPS: {
         "name": "☁️ 雲端官",
         "emoji": "☁️",
         "color": "#448AFF",
+        "avatar_url": f"{_AVATAR_BASE}cloud-ops&backgroundColor=448AFF",
     },
 }
