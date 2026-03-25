@@ -23,6 +23,7 @@ from shared.claude_client import ClaudeClient
 from shared.config import get_settings
 from shared.discord_notifier import DiscordNotifier
 from shared.dispatcher import AgentDispatcher
+from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
 
 from .agents import register_all_agents
@@ -49,6 +50,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         }
     )
 
+    # GitHub client (optional)
+    github_client: GitHubClient | None = None
+    if settings.github_token:
+        github_client = GitHubClient(settings.github_token)
+
     # Agent dispatcher (replaces database task queue)
     dispatcher = AgentDispatcher(claude_client, linear_client, discord_notifier)
     register_all_agents(dispatcher)
@@ -58,10 +64,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.claude_client = claude_client
     app.state.discord_notifier = discord_notifier
     app.state.dispatcher = dispatcher
+    app.state.github_client = github_client
 
     # Start Discord bot (non-blocking)
     if settings.discord_bot_token:
-        await start_bot(settings.discord_bot_token)
+        await start_bot(
+            settings.discord_bot_token,
+            linear_client=linear_client,
+            claude_client=claude_client,
+            discord_notifier=discord_notifier,
+            dispatcher=dispatcher,
+            github_client=github_client,
+        )
 
     logger.info("Gateway started (agents: %d registered)", len(dispatcher._registry))
     yield
@@ -72,6 +86,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await linear_client.close()
     await claude_client.close()
     await discord_notifier.close()
+    if github_client:
+        await github_client.close()
     logger.info("Gateway stopped")
 
 

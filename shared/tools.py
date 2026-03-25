@@ -129,6 +129,48 @@ TOOL_COMPLETE_TASK = {
     },
 }
 
+TOOL_GITHUB_CREATE_PR = {
+    "name": "github_create_pr",
+    "description": "Create a GitHub pull request with code changes.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "branch_name": {"type": "string", "description": "New branch name"},
+            "title": {"type": "string", "description": "PR title"},
+            "body": {"type": "string", "description": "PR description"},
+            "files": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path in repo"},
+                        "content": {"type": "string", "description": "File content"},
+                    },
+                    "required": ["path", "content"],
+                },
+                "description": "Files to create/update",
+            },
+        },
+        "required": ["branch_name", "title", "files"],
+    },
+}
+
+TOOL_GITHUB_READ_FILE = {
+    "name": "github_read_file",
+    "description": "Read a file from the GitHub repository.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File path in repo"},
+            "branch": {
+                "type": "string",
+                "description": "Branch to read from (default: main)",
+            },
+        },
+        "required": ["path"],
+    },
+}
+
 # Tool sets per agent type
 PLANNING_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
@@ -144,6 +186,8 @@ BUILD_TOOLS = [
     TOOL_LINEAR_ADD_COMMENT,
     TOOL_LINEAR_CREATE_ISSUE,
     TOOL_DISCORD_NOTIFY,
+    TOOL_GITHUB_CREATE_PR,
+    TOOL_GITHUB_READ_FILE,
     TOOL_COMPLETE_TASK,
 ]
 

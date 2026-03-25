@@ -20,6 +20,18 @@ class Settings(BaseSettings):
     discord_webhook_url_alerts: str = ""
     discord_webhook_url_deploy_log: str = ""
 
+    # GitHub
+    github_token: str = ""
+    github_repo_owner: str = ""
+    github_repo_name: str = ""
+
+    # Vercel
+    vercel_token: str = ""
+    vercel_team_id: str = ""
+
+    # Supabase Management
+    supabase_access_token: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
