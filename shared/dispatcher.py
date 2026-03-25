@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from typing import Any
 
 from shared.agent_base import AgentTask
@@ -63,10 +64,14 @@ class AgentDispatcher:
         claude_client: ClaudeClient,
         linear_client: LinearClient,
         discord_notifier: DiscordNotifier,
+        metrics_store: Any | None = None,
+        config_manager: Any | None = None,
     ) -> None:
         self._claude = claude_client
         self._linear = linear_client
         self._discord = discord_notifier
+        self._metrics_store = metrics_store
+        self._config_manager = config_manager
         self._registry: dict[AgentRole, AgentHandler] = {}
         self._active_tasks: set[asyncio.Task[Any]] = set()
 
@@ -124,10 +129,14 @@ class AgentDispatcher:
         task: AgentTask,
     ) -> None:
         """Run an agent handler with error handling and Discord alerting."""
+        success = False
+        error_msg = ""
+        result: dict[str, Any] = {}
+        start_time = time.monotonic()
         try:
-            result = await handler(task, self._claude, self._linear, self._discord)
-            tokens = (result or {}).get("tokens_used", 0)
-            model = (result or {}).get("model_used", "")
+            result = await handler(task, self._claude, self._linear, self._discord) or {}
+            tokens = result.get("tokens_used", 0)
+            model = result.get("model_used", "")
             logger.info(
                 "Agent %s completed for %s: %d tokens (%s)",
                 agent_role,
@@ -135,13 +144,59 @@ class AgentDispatcher:
                 tokens,
                 model,
             )
+            success = True
         except Exception as e:
+            error_msg = str(e)
             logger.exception("Agent %s failed for %s: %s", agent_role, task.issue_id, e)
             await self._discord.send_alert(
                 agent_role=agent_role,
                 title=f"Agent Failed: {task.issue_id}",
                 description=f"Agent `{agent_role}` failed.\nError: {e}",
             )
+        finally:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            tokens = (result or {}).get("tokens_used", 0)
+            model = (result or {}).get("model_used", "")
+            summary_text = (result or {}).get("summary", "")
+
+            if self._metrics_store:
+                from shared.metrics import AgentRunRecord
+                self._metrics_store.record(AgentRunRecord(
+                    agent_role=str(agent_role),
+                    issue_id=task.issue_id,
+                    tokens_used=tokens,
+                    model_used=model,
+                    duration_ms=duration_ms,
+                    success=success,
+                    error_message=error_msg,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    summary=summary_text[:200],
+                ))
+
+            # Learning capture: record noteworthy events
+            if self._config_manager and (not success or tokens > 5000):
+                tag = "FAIL" if not success else "HIGH_TOKEN"
+                self._config_manager.append_learning(
+                    f"{agent_role} | {task.issue_id} | {tag} | {tokens} tokens | {summary_text[:100]}"
+                )
+
+            # Auto-trigger learning review every 10 runs
+            if (self._metrics_store
+                and self._metrics_store.run_count % 10 == 0
+                and self._metrics_store.run_count > 0):
+                from shared.models import AgentRole as AR
+                admin_handler = self._registry.get(AR.ADMIN)
+                if admin_handler:
+                    from shared.agent_base import AgentTask as AT
+                    learn_task = AT(
+                        issue_id=f"learn-{self._metrics_store.run_count}",
+                        agent_role="admin",
+                        payload={"prompt": "檢視學習紀錄和 metrics，分析模式和優化機會，必要時更新 skill 文件。將分析報告發布到 Discord #dashboard。"},
+                    )
+                    asyncio.create_task(
+                        self._run_agent(AR.ADMIN, admin_handler, learn_task),
+                        name=f"admin:learn:{self._metrics_store.run_count}",
+                    )
 
     async def shutdown(self) -> None:
         """Wait for all active agent tasks to complete."""

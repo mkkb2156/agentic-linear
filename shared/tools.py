@@ -220,6 +220,95 @@ TOOL_GITHUB_LIST_REPOS = {
     },
 }
 
+TOOL_QUERY_METRICS = {
+    "name": "query_metrics",
+    "description": "Query agent execution metrics. Returns aggregate stats like total runs, tokens, success rate, cost.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "agent_role": {"type": "string", "description": "Filter by agent role (optional)"},
+            "days": {"type": "integer", "description": "Look back N days (default: 7)"},
+        },
+        "required": [],
+    },
+}
+
+TOOL_GET_AGENT_CONFIG = {
+    "name": "get_agent_config",
+    "description": "Get a specific agent's YAML configuration (model, skills, max_turns, enabled).",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "agent_role": {"type": "string", "description": "Agent role name"},
+        },
+        "required": ["agent_role"],
+    },
+}
+
+TOOL_UPDATE_AGENT_CONFIG = {
+    "name": "update_agent_config",
+    "description": "Update an agent's configuration (model, skills list, max_turns, enabled).",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "agent_role": {"type": "string", "description": "Agent role name"},
+            "model": {"type": "string", "description": "Model to use (sonnet or opus)"},
+            "max_turns": {"type": "integer", "description": "Maximum tool-use turns"},
+            "skills": {"type": "array", "items": {"type": "string"}, "description": "Skill names to load"},
+            "enabled": {"type": "boolean", "description": "Whether agent is enabled"},
+        },
+        "required": ["agent_role"],
+    },
+}
+
+TOOL_LIST_SKILLS = {
+    "name": "list_skills",
+    "description": "List all available skill files.",
+    "input_schema": {"type": "object", "properties": {}, "required": []},
+}
+
+TOOL_READ_SKILL = {
+    "name": "read_skill",
+    "description": "Read the content of a skill file.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"name": {"type": "string", "description": "Skill name (without .md)"}},
+        "required": ["name"],
+    },
+}
+
+TOOL_WRITE_SKILL = {
+    "name": "write_skill",
+    "description": "Create or update a skill file with new content.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Skill name (without .md)"},
+            "content": {"type": "string", "description": "Skill content in markdown"},
+        },
+        "required": ["name", "content"],
+    },
+}
+
+TOOL_READ_LEARNINGS = {
+    "name": "read_learnings",
+    "description": "Read the agent learning log.",
+    "input_schema": {"type": "object", "properties": {}, "required": []},
+}
+
+TOOL_GENERATE_REPORT = {
+    "name": "generate_report",
+    "description": "Generate a formatted performance report for agents.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "report_type": {"type": "string", "enum": ["daily", "weekly", "agent_detail"], "description": "Report type"},
+            "agent_role": {"type": "string", "description": "Agent role for detail report (optional)"},
+        },
+        "required": ["report_type"],
+    },
+}
+
 # Tool sets per agent type
 PLANNING_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
@@ -246,6 +335,19 @@ VERIFY_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
     TOOL_LINEAR_ADD_COMMENT,
     TOOL_LINEAR_QUERY_ISSUES,
+    TOOL_DISCORD_NOTIFY,
+    TOOL_COMPLETE_TASK,
+]
+
+ADMIN_TOOLS = [
+    TOOL_QUERY_METRICS,
+    TOOL_GET_AGENT_CONFIG,
+    TOOL_UPDATE_AGENT_CONFIG,
+    TOOL_LIST_SKILLS,
+    TOOL_READ_SKILL,
+    TOOL_WRITE_SKILL,
+    TOOL_READ_LEARNINGS,
+    TOOL_GENERATE_REPORT,
     TOOL_DISCORD_NOTIFY,
     TOOL_COMPLETE_TASK,
 ]

@@ -15,10 +15,11 @@ from services.verify.agents.devops import execute as devops_execute
 from services.verify.agents.release_manager import execute as release_execute
 from services.ops.agents.infra_ops import execute as infra_execute
 from services.ops.agents.cloud_ops import execute as cloud_execute
+from services.admin.agents.admin_agent import execute as admin_execute
 
 
 def register_all_agents(dispatcher: AgentDispatcher) -> None:
-    """Register all 10 pipeline agents with the dispatcher."""
+    """Register all 11 pipeline agents with the dispatcher."""
     dispatcher.register(AgentRole.PRODUCT_STRATEGIST, product_strategist_execute)
     dispatcher.register(AgentRole.SPEC_ARCHITECT, spec_architect_execute)
     dispatcher.register(AgentRole.SYSTEM_ARCHITECT, system_architect_execute)
@@ -29,3 +30,4 @@ def register_all_agents(dispatcher: AgentDispatcher) -> None:
     dispatcher.register(AgentRole.RELEASE_MANAGER, release_execute)
     dispatcher.register(AgentRole.INFRA_OPS, infra_execute)
     dispatcher.register(AgentRole.CLOUD_OPS, cloud_execute)
+    dispatcher.register(AgentRole.ADMIN, admin_execute)

@@ -19,12 +19,14 @@ from typing import Any, AsyncIterator
 
 from fastapi import FastAPI
 
+from shared.agent_config import AgentConfigManager
 from shared.claude_client import ClaudeClient
 from shared.config import get_settings
 from shared.discord_notifier import DiscordNotifier
 from shared.dispatcher import AgentDispatcher
 from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
+from shared.metrics import MetricsStore
 
 from .agents import register_all_agents
 from .discord.bot import start_bot, stop_bot
@@ -55,8 +57,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.github_token:
         github_client = GitHubClient(settings.github_token, owner=settings.github_repo_owner)
 
+    # Metrics and config
+    metrics_store = MetricsStore()
+    metrics_store.load()
+    config_manager = AgentConfigManager()
+
     # Agent dispatcher (replaces database task queue)
-    dispatcher = AgentDispatcher(claude_client, linear_client, discord_notifier)
+    dispatcher = AgentDispatcher(
+        claude_client,
+        linear_client,
+        discord_notifier,
+        metrics_store=metrics_store,
+        config_manager=config_manager,
+    )
     register_all_agents(dispatcher)
 
     # Store on app.state for request handlers
@@ -65,6 +78,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.discord_notifier = discord_notifier
     app.state.dispatcher = dispatcher
     app.state.github_client = github_client
+    app.state.metrics_store = metrics_store
+    app.state.config_manager = config_manager
 
     # Start Discord bot (non-blocking)
     if settings.discord_bot_token:
@@ -75,12 +90,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             discord_notifier=discord_notifier,
             dispatcher=dispatcher,
             github_client=github_client,
+            metrics_store=metrics_store,
+            config_manager=config_manager,
         )
 
     logger.info("Gateway started (agents: %d registered)", len(dispatcher._registry))
     yield
 
     # Cleanup
+    metrics_store.flush()
     await dispatcher.shutdown()
     await stop_bot()
     await linear_client.close()

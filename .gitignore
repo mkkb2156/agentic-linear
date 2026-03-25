@@ -36,3 +36,6 @@ htmlcov/
 
 # Ruff
 .ruff_cache/
+
+# Runtime data
+data/metrics.json
