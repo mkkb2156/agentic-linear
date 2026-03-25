@@ -25,6 +25,10 @@ def setup_commands(bot: commands.Bot) -> None:
         linear = bot.linear_client  # type: ignore[attr-defined]
 
         try:
+            # Extract project name: use first line, strip to 80 chars, no newlines
+            lines = description.strip().split("\n")
+            project_name = lines[0][:80].strip()
+
             # Create a Linear project
             project_result = await linear._graphql(
                 """
@@ -37,7 +41,7 @@ def setup_commands(bot: commands.Bot) -> None:
                 """,
                 {
                     "input": {
-                        "name": description[:80],
+                        "name": project_name,
                         "teamIds": [DRONE168_TEAM_ID],
                     }
                 },
