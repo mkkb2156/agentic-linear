@@ -22,8 +22,7 @@ class Settings(BaseSettings):
 
     # GitHub
     github_token: str = ""
-    github_repo_owner: str = ""
-    github_repo_name: str = ""
+    github_repo_owner: str = ""  # Agent auto-resolves repos; owner used as default prefix
 
     # Vercel
     vercel_token: str = ""

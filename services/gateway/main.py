@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # GitHub client (optional)
     github_client: GitHubClient | None = None
     if settings.github_token:
-        github_client = GitHubClient(settings.github_token)
+        github_client = GitHubClient(settings.github_token, owner=settings.github_repo_owner)
 
     # Agent dispatcher (replaces database task queue)
     dispatcher = AgentDispatcher(claude_client, linear_client, discord_notifier)

@@ -305,6 +305,12 @@ class BaseAgent:
             elif tool_name == "discord_notify":
                 return await self._tool_discord_notify(tool_input), False
 
+            elif tool_name == "github_list_repos":
+                return await self._tool_github_list_repos(tool_input), False
+
+            elif tool_name == "github_create_repo":
+                return await self._tool_github_create_repo(tool_input), False
+
             elif tool_name == "github_create_pr":
                 return await self._tool_github_create_pr(tool_input), False
 
@@ -410,19 +416,44 @@ class BaseAgent:
         )
         return {"success": True}
 
+    async def _tool_github_list_repos(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        search = inp.get("search", "")
+        if search:
+            repos = await self.github.search_repos(search)
+        else:
+            repos = await self.github.list_repos()
+        return {
+            "repos": [
+                {"name": r["name"], "full_name": r["full_name"], "description": r.get("description", "")}
+                for r in repos[:20]
+            ]
+        }
+
+    async def _tool_github_create_repo(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            return {"error": "GitHub client not configured"}
+        repo = await self.github.find_or_create_repo(
+            name=inp["name"],
+            description=inp.get("description", ""),
+            private=inp.get("private", False),
+        )
+        return {
+            "success": True,
+            "full_name": repo.get("full_name", ""),
+            "html_url": repo.get("html_url", ""),
+            "created": repo.get("created_at", ""),
+        }
+
     async def _tool_github_create_pr(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
             return {"error": "GitHub client not configured"}
-        from shared.config import get_settings
-
-        settings = get_settings()
-        repo = f"{settings.github_repo_owner}/{settings.github_repo_name}"
+        repo = inp["repo"]
         branch_name = inp["branch_name"]
 
-        # Create branch
         await self.github.create_branch(repo, branch_name)
 
-        # Push each file
         for f in inp["files"]:
             await self.github.push_file(
                 repo=repo,
@@ -432,7 +463,6 @@ class BaseAgent:
                 branch=branch_name,
             )
 
-        # Create PR
         pr = await self.github.create_pull_request(
             repo=repo,
             title=inp["title"],
@@ -444,12 +474,8 @@ class BaseAgent:
     async def _tool_github_read_file(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
             return {"error": "GitHub client not configured"}
-        from shared.config import get_settings
-
-        settings = get_settings()
-        repo = f"{settings.github_repo_owner}/{settings.github_repo_name}"
+        repo = inp["repo"]
         branch = inp.get("branch", "main")
-
         data = await self.github.get_file(repo, inp["path"], branch)
         return {"path": inp["path"], "content": data.get("decoded_content", "")}
 
