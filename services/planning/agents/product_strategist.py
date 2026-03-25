@@ -6,9 +6,7 @@ from typing import Any
 
 import logging
 
-import asyncpg
-
-from shared.agent_base import BaseAgent
+from shared.agent_base import AgentTask, BaseAgent
 from shared.claude_client import ClaudeClient
 from shared.discord_notifier import DiscordNotifier
 from shared.linear_client import LinearClient
@@ -52,7 +50,7 @@ class ProductStrategist(BaseAgent):
 
 
 async def execute(
-    task: asyncpg.Record,
+    task: AgentTask,
     claude_client: ClaudeClient,
     linear_client: LinearClient,
     discord_notifier: DiscordNotifier,

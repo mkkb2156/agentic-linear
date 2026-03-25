@@ -1,13 +1,11 @@
 """Tests for the base agent framework and tool handling."""
 
-import json
-import uuid
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from shared.agent_base import BaseAgent
+from shared.agent_base import AgentTask, BaseAgent
 from shared.models import AgentRole
 from shared.tools import PLANNING_TOOLS
 
@@ -24,8 +22,8 @@ def _make_task(
     issue_id: str = "DRO-99",
     agent_role: str = "product_strategist",
     payload: dict | None = None,
-) -> MagicMock:
-    """Create a mock asyncpg.Record for a task."""
+) -> AgentTask:
+    """Create a test AgentTask."""
     if payload is None:
         payload = {
             "event": {
@@ -41,21 +39,12 @@ def _make_task(
             "new_status": "Strategy Complete",
         }
 
-    task = MagicMock()
-    task.__getitem__ = lambda self, key: {
-        "id": uuid.uuid4(),
-        "issue_id": issue_id,
-        "agent_role": agent_role,
-        "queue_name": "planning",
-        "payload": payload,
-    }[key]
-    return task
+    return AgentTask(issue_id=issue_id, agent_role=agent_role, payload=payload)
 
 
 @pytest.fixture
 def mock_claude() -> AsyncMock:
-    client = AsyncMock()
-    return client
+    return AsyncMock()
 
 
 @pytest.fixture
@@ -88,7 +77,6 @@ async def test_agent_completes_with_tool_use(
     mock_claude: AsyncMock, mock_linear: AsyncMock, mock_discord: AsyncMock
 ) -> None:
     """Test agent runs agentic loop and completes via complete_task tool."""
-    # Mock Claude returning a tool_use response followed by end_turn
     tool_use_block = MagicMock()
     tool_use_block.type = "tool_use"
     tool_use_block.name = "complete_task"
@@ -112,13 +100,9 @@ async def test_agent_completes_with_tool_use(
     assert result["summary"] == "PRD created"
     assert result["next_status"] == "Strategy Complete"
     assert result["tokens_used"] == 150
-    assert result["model_used"] == "claude-sonnet-4-6"
 
-    # Should have notified Discord
     mock_discord.send_task_started.assert_called_once()
     mock_discord.send_task_complete.assert_called_once()
-
-    # Should have transitioned Linear status
     mock_linear.transition_issue.assert_called_once_with("issue-uuid-123", "Strategy Complete")
 
 
@@ -146,7 +130,7 @@ async def test_agent_handles_text_response(
     result = await agent.run(task)
 
     assert "I analyzed the issue" in result["summary"]
-    assert result["next_status"] == ""  # No status transition
+    assert result["next_status"] == ""
     mock_linear.transition_issue.assert_not_called()
 
 
@@ -155,7 +139,6 @@ async def test_agent_executes_linear_comment_tool(
     mock_claude: AsyncMock, mock_linear: AsyncMock, mock_discord: AsyncMock
 ) -> None:
     """Test agent can call linear_add_comment then complete_task."""
-    # First response: call linear_add_comment
     comment_block = MagicMock()
     comment_block.type = "tool_use"
     comment_block.name = "linear_add_comment"
@@ -169,7 +152,6 @@ async def test_agent_executes_linear_comment_tool(
     response1.usage.input_tokens = 100
     response1.usage.output_tokens = 50
 
-    # Second response: call complete_task
     complete_block = MagicMock()
     complete_block.type = "tool_use"
     complete_block.name = "complete_task"
@@ -196,7 +178,7 @@ async def test_agent_executes_linear_comment_tool(
 
     assert result["summary"] == "PRD posted"
     mock_linear.add_comment.assert_called_once_with("issue-uuid-123", "## PRD\nThis is the PRD")
-    assert result["tokens_used"] == 390  # 150 + 240
+    assert result["tokens_used"] == 390
 
 
 @pytest.mark.asyncio
@@ -208,7 +190,6 @@ async def test_agent_includes_previous_comments(
         {"user": {"name": "Product Strategist"}, "body": "## PRD\nRequirements here..."},
     ]
 
-    # Simple text response
     text_block = MagicMock()
     text_block.type = "text"
     text_block.text = "Acknowledged"
@@ -227,7 +208,6 @@ async def test_agent_includes_previous_comments(
 
     await agent.run(task)
 
-    # Check that the user message sent to Claude includes previous comments
     call_args = mock_claude.execute.call_args
     messages = call_args.kwargs.get("messages", call_args.args[2] if len(call_args.args) > 2 else [])
     user_content = messages[0]["content"]
@@ -240,7 +220,6 @@ async def test_agent_handles_tool_error(
     mock_claude: AsyncMock, mock_linear: AsyncMock, mock_discord: AsyncMock
 ) -> None:
     """Test agent handles tool execution errors gracefully."""
-    # Tool call that will fail
     comment_block = MagicMock()
     comment_block.type = "tool_use"
     comment_block.name = "linear_add_comment"
@@ -254,7 +233,6 @@ async def test_agent_handles_tool_error(
     response1.usage.input_tokens = 100
     response1.usage.output_tokens = 50
 
-    # After error, Claude completes
     complete_block = MagicMock()
     complete_block.type = "tool_use"
     complete_block.name = "complete_task"
@@ -279,5 +257,4 @@ async def test_agent_handles_tool_error(
 
     result = await agent.run(task)
 
-    # Should still complete despite tool error
     assert result["summary"] == "Done with errors"

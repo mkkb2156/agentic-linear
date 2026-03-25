@@ -6,9 +6,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/gds_agent"
-
     # Linear
     linear_api_key: str = ""
     linear_webhook_secret: str = ""

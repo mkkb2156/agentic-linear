@@ -1,12 +1,13 @@
-"""Base agent class with Claude Tool Use agentic loop."""
+"""Base agent class with Claude Tool Use agentic loop.
+
+Tasks are dicts derived from Linear webhook payloads — no database dependency.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 from typing import Any
-
-import asyncpg
 
 from shared.claude_client import ClaudeClient
 from shared.discord_notifier import DiscordNotifier
@@ -17,6 +18,24 @@ logger = logging.getLogger(__name__)
 
 # Maximum tool-use turns to prevent runaway loops
 MAX_TURNS = 15
+
+
+class AgentTask:
+    """Lightweight task object built from webhook payload — replaces asyncpg.Record."""
+
+    def __init__(
+        self,
+        issue_id: str,
+        agent_role: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self.issue_id = issue_id
+        self.agent_role = agent_role
+        self.payload = payload
+
+    def __getitem__(self, key: str) -> Any:
+        """Dict-like access for backward compatibility."""
+        return getattr(self, key)
 
 
 class BaseAgent:
@@ -44,7 +63,7 @@ class BaseAgent:
         self.linear = linear_client
         self.discord = discord_notifier
 
-    async def run(self, task: asyncpg.Record) -> dict[str, Any]:
+    async def run(self, task: AgentTask) -> dict[str, Any]:
         """
         Execute the agentic loop:
         1. Build initial message from task payload
@@ -54,8 +73,8 @@ class BaseAgent:
 
         Returns dict with 'summary', 'next_status', 'tokens_used', 'model_used'.
         """
-        payload = json.loads(task["payload"]) if isinstance(task["payload"], str) else task["payload"]
-        issue_id = task["issue_id"]
+        payload = task.payload
+        issue_id = task.issue_id
 
         # Fetch full issue context from Linear
         issue = await self._fetch_issue_context(payload)
@@ -180,32 +199,32 @@ class BaseAgent:
         new_status = payload.get("new_status", "Unknown")
 
         parts = [
-            f"## Task Assignment",
-            f"",
+            "## Task Assignment",
+            "",
             f"A Linear issue has transitioned from **{old_status}** to **{new_status}**.",
-            f"You need to process this issue according to your role.",
-            f"",
-            f"### Issue Details",
+            "You need to process this issue according to your role.",
+            "",
+            "### Issue Details",
             f"- **ID**: {issue.get('identifier', issue.get('id', 'N/A'))}",
             f"- **Title**: {issue.get('title', 'N/A')}",
-            f"- **Description**:",
+            "- **Description**:",
             f"{issue.get('description', 'No description provided.')}",
-            f"",
+            "",
         ]
 
         # Add project context if available
         project = issue.get("project", {})
         if project:
             parts.extend([
-                f"### Project",
+                "### Project",
                 f"- **Name**: {project.get('name', 'N/A')}",
-                f"",
+                "",
             ])
 
         # Add labels
         labels = issue.get("labels", {}).get("nodes", [])
         if labels:
-            label_names = ", ".join(l.get("name", "") for l in labels)
+            label_names = ", ".join(lbl.get("name", "") for lbl in labels)
             parts.append(f"**Labels**: {label_names}")
             parts.append("")
 
@@ -221,10 +240,10 @@ class BaseAgent:
             parts.append("")
 
         parts.extend([
-            f"### Instructions",
-            f"1. Analyze the issue and perform your role's responsibilities",
-            f"2. Post your deliverables as a comment on the issue",
-            f"3. Call `complete_task` with a summary and the next pipeline status",
+            "### Instructions",
+            "1. Analyze the issue and perform your role's responsibilities",
+            "2. Post your deliverables as a comment on the issue",
+            "3. Call `complete_task` with a summary and the next pipeline status",
         ])
 
         return "\n".join(parts)
@@ -270,7 +289,6 @@ class BaseAgent:
             updates["description"] = inp["description"]
 
         if "state_name" in inp:
-            # Look up state ID by name
             state_id = await self.linear.find_state_id(issue_id, inp["state_name"])
             if state_id:
                 updates["stateId"] = state_id
@@ -285,7 +303,6 @@ class BaseAgent:
         return {"success": result.get("success", False)}
 
     async def _tool_linear_create(self, inp: dict[str, Any]) -> dict[str, Any]:
-        # Would need team_id from config in production
         kwargs: dict[str, Any] = {}
         if "description" in inp:
             kwargs["description"] = inp["description"]
@@ -310,7 +327,7 @@ class BaseAgent:
             filter_input["title"] = {"contains": inp["query"]}
 
         issues = await self.linear.query_issues(filter_input)
-        return {"issues": issues[:10]}  # Limit to 10 results
+        return {"issues": issues[:10]}
 
     async def _tool_discord_notify(self, inp: dict[str, Any]) -> dict[str, Any]:
         await self.discord.notify(
@@ -344,7 +361,6 @@ class BaseAgent:
                 result.get("success", False),
             )
         except ValueError as e:
-            # State name not found — log but don't crash
             logger.error("Failed to transition status: %s", e)
         except Exception as e:
             logger.error("Failed to transition status: %s", e)

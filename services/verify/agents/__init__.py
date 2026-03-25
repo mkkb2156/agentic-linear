@@ -1,5 +1,5 @@
+from shared.dispatcher import AgentHandler
 from shared.models import AgentRole
-from shared.worker import AgentHandler
 
 from .qa_engineer import execute as qa_execute
 from .devops import execute as devops_execute

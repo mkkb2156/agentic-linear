@@ -1,15 +1,22 @@
+"""Event router — DAG-enforced pipeline routing.
+
+Routes Linear webhook events to agent handlers via the dispatcher.
+Linear is the source of truth; no intermediate database queue.
+"""
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 
+from shared.agent_base import AgentTask
+from shared.dispatcher import AgentDispatcher
 from shared.models import (
     PIPELINE_ORDER,
     PIPELINE_TRANSITIONS,
     LinearWebhookPayload,
     StatusTransition,
 )
-from shared.queue import TaskQueue
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +30,13 @@ _STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(PIPELINE_ORDER)}
 
 
 class EventRouter:
-    def __init__(self, task_queue: TaskQueue) -> None:
-        self._queue = task_queue
+    def __init__(self, dispatcher: AgentDispatcher) -> None:
+        self._dispatcher = dispatcher
 
     async def route(self, event: LinearWebhookPayload, delivery_id: str | None = None) -> int:
         """
-        Route a Linear webhook event to the appropriate agent queue(s).
-        Returns the number of tasks enqueued.
+        Route a Linear webhook event to the appropriate agent(s).
+        Returns the number of agents dispatched.
         """
         if event.action != "update" or event.type != "Issue":
             return 0
@@ -57,32 +64,35 @@ class EventRouter:
             return 0
 
         issue_id = event.data.get("identifier", event.data.get("id", "unknown"))
-        enqueued = 0
+        dispatched = 0
 
         for transition in transitions:
-            idem_key = f"{delivery_id}:{transition.agent_role}" if delivery_id else None
-            task_id = await self._queue.enqueue(
-                queue_name=transition.queue_name,
-                agent_role=transition.agent_role,
+            task = AgentTask(
                 issue_id=issue_id,
+                agent_role=transition.agent_role,
                 payload={
                     "event": event.model_dump(),
                     "old_status": old_state,
                     "new_status": new_state,
                 },
-                idempotency_key=idem_key,
             )
-            if task_id:
-                enqueued += 1
+
+            success = await self._dispatcher.dispatch(
+                agent_role=transition.agent_role,
+                task=task,
+                delivery_id=delivery_id,
+            )
+            if success:
+                dispatched += 1
 
         logger.info(
-            "Routed %s → %s: %d task(s) enqueued for %s",
+            "Routed %s → %s: %d agent(s) dispatched for %s",
             old_state,
             new_state,
-            enqueued,
+            dispatched,
             issue_id,
         )
-        return enqueued
+        return dispatched
 
     @staticmethod
     def _is_forward_transition(old_status: str, new_status: str) -> bool:

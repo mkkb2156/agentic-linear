@@ -1,23 +1,22 @@
 """Tests for the event routing engine."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from shared.models import AgentRole, LinearWebhookPayload, QueueName
+from shared.models import AgentRole, LinearWebhookPayload
 from services.gateway.router import EventRouter
 
 
 @pytest.fixture
-def mock_queue() -> AsyncMock:
-    queue = AsyncMock()
-    queue.enqueue = AsyncMock(return_value="fake-task-id")
-    queue.notify = AsyncMock()
-    return queue
+def mock_dispatcher() -> AsyncMock:
+    dispatcher = AsyncMock()
+    dispatcher.dispatch = AsyncMock(return_value=True)
+    return dispatcher
 
 
 @pytest.fixture
-def router(mock_queue: AsyncMock) -> EventRouter:
-    return EventRouter(mock_queue)
+def router(mock_dispatcher: AsyncMock) -> EventRouter:
+    return EventRouter(mock_dispatcher)
 
 
 def _make_event(
@@ -39,48 +38,47 @@ def _make_event(
 
 @pytest.mark.asyncio
 async def test_strategy_complete_routes_to_spec_architect(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = _make_event("In Progress", "Strategy Complete")
     count = await router.route(event, delivery_id="delivery-1")
 
     assert count == 1
-    mock_queue.enqueue.assert_called_once()
-    call_kwargs = mock_queue.enqueue.call_args
-    assert call_kwargs.kwargs["queue_name"] == QueueName.PLANNING
+    mock_dispatcher.dispatch.assert_called_once()
+    call_kwargs = mock_dispatcher.dispatch.call_args
     assert call_kwargs.kwargs["agent_role"] == AgentRole.SPEC_ARCHITECT
 
 
 @pytest.mark.asyncio
 async def test_architecture_complete_triggers_parallel_agents(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = _make_event("Spec Complete", "Architecture Complete")
     count = await router.route(event, delivery_id="delivery-2")
 
     assert count == 2
-    assert mock_queue.enqueue.call_count == 2
+    assert mock_dispatcher.dispatch.call_count == 2
 
-    roles = [call.kwargs["agent_role"] for call in mock_queue.enqueue.call_args_list]
+    roles = [call.kwargs["agent_role"] for call in mock_dispatcher.dispatch.call_args_list]
     assert AgentRole.FRONTEND_ENGINEER in roles
     assert AgentRole.BACKEND_ENGINEER in roles
 
 
 @pytest.mark.asyncio
 async def test_backward_transition_blocked(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     # Architecture Complete → Strategy Complete is backward
     event = _make_event("Architecture Complete", "Strategy Complete")
     count = await router.route(event, delivery_id="delivery-3")
 
     assert count == 0
-    mock_queue.enqueue.assert_not_called()
+    mock_dispatcher.dispatch.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_non_update_action_ignored(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = LinearWebhookPayload(
         action="create",
@@ -93,7 +91,7 @@ async def test_non_update_action_ignored(
 
 @pytest.mark.asyncio
 async def test_non_issue_type_ignored(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = LinearWebhookPayload(
         action="update",
@@ -107,7 +105,7 @@ async def test_non_issue_type_ignored(
 
 @pytest.mark.asyncio
 async def test_unknown_status_ignored(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = _make_event("In Progress", "Some Random Status")
     count = await router.route(event, delivery_id="delivery-4")
@@ -115,19 +113,19 @@ async def test_unknown_status_ignored(
 
 
 @pytest.mark.asyncio
-async def test_idempotency_key_format(
-    router: EventRouter, mock_queue: AsyncMock
+async def test_delivery_id_passed_to_dispatcher(
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     event = _make_event("In Progress", "Strategy Complete")
     await router.route(event, delivery_id="abc-123")
 
-    call_kwargs = mock_queue.enqueue.call_args.kwargs
-    assert call_kwargs["idempotency_key"] == f"abc-123:{AgentRole.SPEC_ARCHITECT}"
+    call_kwargs = mock_dispatcher.dispatch.call_args.kwargs
+    assert call_kwargs["delivery_id"] == "abc-123"
 
 
 @pytest.mark.asyncio
 async def test_all_pipeline_transitions(
-    router: EventRouter, mock_queue: AsyncMock
+    router: EventRouter, mock_dispatcher: AsyncMock
 ) -> None:
     """Verify all defined transitions produce tasks."""
     transitions = [
@@ -141,8 +139,8 @@ async def test_all_pipeline_transitions(
     ]
 
     for old, new, expected_count in transitions:
-        mock_queue.enqueue.reset_mock()
-        mock_queue.enqueue.return_value = "fake-id"
+        mock_dispatcher.dispatch.reset_mock()
+        mock_dispatcher.dispatch.return_value = True
         event = _make_event(old, new)
         count = await router.route(event)
         assert count == expected_count, f"Failed for {old} → {new}: expected {expected_count}, got {count}"
