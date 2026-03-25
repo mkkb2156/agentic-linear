@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -21,40 +19,6 @@ class AgentRole(StrEnum):
     CLOUD_OPS = "cloud_ops"
 
 
-class QueueName(StrEnum):
-    PLANNING = "planning"
-    BUILD = "build"
-    VERIFY = "verify"
-    OPS = "ops"
-
-
-class TaskStatus(StrEnum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    DEAD = "dead"
-
-
-class AgentTask(BaseModel):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    queue_name: QueueName
-    agent_role: AgentRole
-    issue_id: str
-    project_id: uuid.UUID | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
-    status: TaskStatus = TaskStatus.PENDING
-    retry_count: int = 0
-    max_retries: int = 3
-    model_used: str | None = None
-    tokens_used: int = 0
-    created_at: datetime | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    error_message: str | None = None
-    idempotency_key: str | None = None
-
-
 class LinearWebhookPayload(BaseModel):
     action: str  # create / update / remove
     type: str  # Issue, Comment, etc.
@@ -67,10 +31,9 @@ class LinearWebhookPayload(BaseModel):
 
 
 class StatusTransition(BaseModel):
-    """Maps a Linear issue status to the target queue and agent role."""
+    """Maps a Linear issue status to the agent role(s) it triggers."""
 
     from_status: str
-    queue_name: QueueName
     agent_role: AgentRole
 
 
@@ -79,48 +42,39 @@ class StatusTransition(BaseModel):
 PIPELINE_TRANSITIONS: list[StatusTransition] = [
     StatusTransition(
         from_status="Strategy Complete",
-        queue_name=QueueName.PLANNING,
         agent_role=AgentRole.SPEC_ARCHITECT,
     ),
     StatusTransition(
         from_status="Spec Complete",
-        queue_name=QueueName.PLANNING,
         agent_role=AgentRole.SYSTEM_ARCHITECT,
     ),
     # Architecture Complete triggers BOTH frontend + backend (parallel)
     StatusTransition(
         from_status="Architecture Complete",
-        queue_name=QueueName.BUILD,
         agent_role=AgentRole.FRONTEND_ENGINEER,
     ),
     StatusTransition(
         from_status="Architecture Complete",
-        queue_name=QueueName.BUILD,
         agent_role=AgentRole.BACKEND_ENGINEER,
     ),
     StatusTransition(
         from_status="Implementation Done",
-        queue_name=QueueName.VERIFY,
         agent_role=AgentRole.QA_ENGINEER,
     ),
     StatusTransition(
         from_status="QA Passed",
-        queue_name=QueueName.VERIFY,
         agent_role=AgentRole.DEVOPS,
     ),
     StatusTransition(
         from_status="Deployed",
-        queue_name=QueueName.VERIFY,
         agent_role=AgentRole.RELEASE_MANAGER,
     ),
     StatusTransition(
         from_status="Alert Triggered",
-        queue_name=QueueName.OPS,
         agent_role=AgentRole.INFRA_OPS,
     ),
     StatusTransition(
         from_status="Deploy Complete",
-        queue_name=QueueName.OPS,
         agent_role=AgentRole.CLOUD_OPS,
     ),
 ]
@@ -137,56 +91,69 @@ PIPELINE_ORDER: list[str] = [
 ]
 
 
-# Agent identity for Discord
+# Agent identity for Discord (name, emoji, color, avatar_url)
+# Avatars use DiceBear Bottts style — deterministic, unique per agent
+_AVATAR_BASE = "https://api.dicebear.com/9.x/bottts/png?seed="
+
 AGENT_IDENTITIES: dict[AgentRole, dict[str, str]] = {
     AgentRole.PRODUCT_STRATEGIST: {
         "name": "🎯 策略師",
         "emoji": "🎯",
         "color": "#003232",
+        "avatar_url": f"{_AVATAR_BASE}strategist&backgroundColor=003232",
     },
     AgentRole.SPEC_ARCHITECT: {
         "name": "📐 規格師",
         "emoji": "📐",
         "color": "#4ECDC4",
+        "avatar_url": f"{_AVATAR_BASE}spec-architect&backgroundColor=4ECDC4",
     },
     AgentRole.SYSTEM_ARCHITECT: {
         "name": "🏗️ 架構師",
         "emoji": "🏗️",
         "color": "#7C4DFF",
+        "avatar_url": f"{_AVATAR_BASE}system-architect&backgroundColor=7C4DFF",
     },
     AgentRole.FRONTEND_ENGINEER: {
         "name": "⚛️ 前端工程師",
         "emoji": "⚛️",
         "color": "#00E676",
+        "avatar_url": f"{_AVATAR_BASE}frontend-engineer&backgroundColor=00E676",
     },
     AgentRole.BACKEND_ENGINEER: {
         "name": "🔧 後端工程師",
         "emoji": "🔧",
         "color": "#FF6E40",
+        "avatar_url": f"{_AVATAR_BASE}backend-engineer&backgroundColor=FF6E40",
     },
     AgentRole.QA_ENGINEER: {
         "name": "🧪 測試工程師",
         "emoji": "🧪",
         "color": "#FF4081",
+        "avatar_url": f"{_AVATAR_BASE}qa-engineer&backgroundColor=FF4081",
     },
     AgentRole.DEVOPS: {
         "name": "🚀 部署官",
         "emoji": "🚀",
         "color": "#FFD740",
+        "avatar_url": f"{_AVATAR_BASE}devops&backgroundColor=FFD740",
     },
     AgentRole.RELEASE_MANAGER: {
         "name": "📋 發版管理",
         "emoji": "📋",
         "color": "#B388FF",
+        "avatar_url": f"{_AVATAR_BASE}release-manager&backgroundColor=B388FF",
     },
     AgentRole.INFRA_OPS: {
         "name": "🖥️ 維運官",
         "emoji": "🖥️",
         "color": "#69F0AE",
+        "avatar_url": f"{_AVATAR_BASE}infra-ops&backgroundColor=69F0AE",
     },
     AgentRole.CLOUD_OPS: {
         "name": "☁️ 雲端官",
         "emoji": "☁️",
         "color": "#448AFF",
+        "avatar_url": f"{_AVATAR_BASE}cloud-ops&backgroundColor=448AFF",
     },
 }

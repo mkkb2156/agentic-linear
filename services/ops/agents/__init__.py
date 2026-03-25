@@ -1,5 +1,5 @@
+from shared.dispatcher import AgentHandler
 from shared.models import AgentRole
-from shared.worker import AgentHandler
 
 from .infra_ops import execute as infra_execute
 from .cloud_ops import execute as cloud_execute

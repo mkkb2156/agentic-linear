@@ -90,6 +90,64 @@ class LinearClient:
         data = await self._graphql(query, {"input": input_data})
         return data.get("issueCreate", {})
 
+    async def get_workflow_states(self, team_id: str) -> list[dict[str, Any]]:
+        """Get all workflow states for a team. Used to look up state IDs by name."""
+        query = """
+        query GetStates($teamId: String!) {
+            team(id: $teamId) {
+                states {
+                    nodes { id name type position }
+                }
+            }
+        }
+        """
+        data = await self._graphql(query, {"teamId": team_id})
+        return data.get("team", {}).get("states", {}).get("nodes", [])
+
+    async def find_state_id(self, issue_id: str, state_name: str) -> str | None:
+        """Find a workflow state ID by name, using the issue's team context."""
+        query = """
+        query GetIssueTeamStates($id: String!) {
+            issue(id: $id) {
+                team {
+                    states {
+                        nodes { id name }
+                    }
+                }
+            }
+        }
+        """
+        data = await self._graphql(query, {"id": issue_id})
+        states = data.get("issue", {}).get("team", {}).get("states", {}).get("nodes", [])
+        for state in states:
+            if state.get("name") == state_name:
+                return state["id"]
+        return None
+
+    async def transition_issue(self, issue_id: str, state_name: str) -> dict[str, Any]:
+        """Transition an issue to a new state by name."""
+        state_id = await self.find_state_id(issue_id, state_name)
+        if not state_id:
+            raise ValueError(f"State '{state_name}' not found for issue {issue_id}")
+        return await self.update_issue(issue_id, {"stateId": state_id})
+
+    async def get_issue_comments(self, issue_id: str) -> list[dict[str, Any]]:
+        """Get comments on an issue (for reading previous agent outputs)."""
+        query = """
+        query GetComments($id: String!) {
+            issue(id: $id) {
+                comments {
+                    nodes {
+                        id body createdAt
+                        user { id name }
+                    }
+                }
+            }
+        }
+        """
+        data = await self._graphql(query, {"id": issue_id})
+        return data.get("issue", {}).get("comments", {}).get("nodes", [])
+
     async def query_issues(self, filter_input: dict[str, Any]) -> list[dict[str, Any]]:
         query = """
         query ListIssues($filter: IssueFilter) {

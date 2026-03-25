@@ -1,21 +1,4 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: gds_agent
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   gateway:
     build:
       context: .
@@ -25,63 +8,4 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gds_agent
       SERVICE_NAME: gateway
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  planning-worker:
-    build:
-      context: .
-      args:
-        SERVICE_NAME: planning
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gds_agent
-      SERVICE_NAME: planning
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  build-worker:
-    build:
-      context: .
-      args:
-        SERVICE_NAME: build
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gds_agent
-      SERVICE_NAME: build
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  verify-worker:
-    build:
-      context: .
-      args:
-        SERVICE_NAME: verify
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gds_agent
-      SERVICE_NAME: verify
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  ops-worker:
-    build:
-      context: .
-      args:
-        SERVICE_NAME: ops
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/gds_agent
-      SERVICE_NAME: ops
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-volumes:
-  pgdata:

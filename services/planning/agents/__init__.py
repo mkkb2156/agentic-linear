@@ -1,5 +1,5 @@
+from shared.dispatcher import AgentHandler
 from shared.models import AgentRole
-from shared.worker import AgentHandler
 
 from .product_strategist import execute as product_strategist_execute
 from .spec_architect import execute as spec_architect_execute
