@@ -81,6 +81,7 @@ class BaseAgent:
         issue_title = issue.get("title", "Unknown")
         # Track the UUID for API calls (different from identifier like DRO-19)
         issue_uuid = issue.get("id", payload.get("event", {}).get("data", {}).get("id", ""))
+        logger.info("[%s] issue_id=%s, issue_uuid=%s", self.role, issue_id, issue_uuid)
 
         # Notify Discord that we're starting
         await self.discord.send_task_started(
@@ -265,7 +266,13 @@ class BaseAgent:
             # Auto-resolve issue_id: Claude often passes identifier (DRO-20)
             # but Linear API needs UUID. Override with tracked UUID.
             if "issue_id" in tool_input and issue_id:
+                logger.info(
+                    "[%s] Tool %s: replacing issue_id %s → %s",
+                    self.role, tool_name, tool_input["issue_id"], issue_id,
+                )
                 tool_input["issue_id"] = issue_id
+
+            logger.info("[%s] Executing tool: %s (input keys: %s)", self.role, tool_name, list(tool_input.keys()))
 
             if tool_name == "linear_update_issue":
                 return await self._tool_linear_update(tool_input), False
@@ -289,7 +296,7 @@ class BaseAgent:
                 return {"error": f"Unknown tool: {tool_name}"}, False
 
         except Exception as e:
-            logger.error("Tool %s failed: %s", tool_name, e)
+            logger.error("[%s] Tool %s FAILED: %s", self.role, tool_name, e)
             return {"error": str(e)}, False
 
     async def _tool_linear_update(self, inp: dict[str, Any]) -> dict[str, Any]:
