@@ -31,7 +31,7 @@ class ClaudeClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         use_opus: bool = False,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
     ) -> tuple[anthropic.types.Message, int, str]:
         """
         Execute a Claude API call with model routing.
