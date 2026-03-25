@@ -50,15 +50,15 @@ def setup_commands(bot: commands.Bot) -> None:
             project_id = project.get("id", "")
 
             # Create an issue with the description as PRD
-            issue_input: dict = {
-                "teamId": DRONE168_TEAM_ID,
-                "title": description[:120],
-                "description": description,
-            }
+            kwargs: dict = {"description": description}
             if project_id:
-                issue_input["projectId"] = project_id
+                kwargs["projectId"] = project_id
 
-            issue_result = await linear.create_issue(**issue_input)
+            issue_result = await linear.create_issue(
+                team_id=DRONE168_TEAM_ID,
+                title=project_name,
+                **kwargs,
+            )
             issue = issue_result.get("issue", {})
             issue_id = issue.get("id", "")
             identifier = issue.get("identifier", "")
