@@ -1,0 +1,12 @@
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Per-service Root Directory is configured in Railway UI:
+# webhook-gateway → services/gateway
+# planning-worker → services/planning
+# build-worker    → services/build
+# verify-worker   → services/verify
+# ops-worker      → services/ops (cronSchedule = "*/15 * * * *")
