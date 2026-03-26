@@ -95,7 +95,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             config_manager=config_manager,
         )
 
-    logger.info("Gateway started (agents: %d registered)", len(dispatcher._registry))
+    logger.info(
+        "Gateway started (agents: %d, github: %s, owner: %s)",
+        len(dispatcher._registry),
+        "CONFIGURED" if github_client else "NOT CONFIGURED",
+        settings.github_repo_owner or "(empty)",
+    )
     yield
 
     # Cleanup
@@ -123,4 +128,5 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "agents_registered": len(dispatcher._registry),
         "agents_active": dispatcher.active_count,
+        "github_configured": app.state.github_client is not None,
     }
