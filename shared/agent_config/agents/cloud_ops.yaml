@@ -1,0 +1,7 @@
+role: cloud_ops
+model: sonnet
+max_turns: 15
+skills:
+  - deploy
+  - linear-workflow
+enabled: true

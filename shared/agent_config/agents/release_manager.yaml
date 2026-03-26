@@ -1,0 +1,7 @@
+role: release_manager
+model: sonnet
+max_turns: 15
+skills:
+  - github-pr
+  - linear-workflow
+enabled: true

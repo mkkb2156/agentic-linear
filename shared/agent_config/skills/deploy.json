@@ -1,0 +1,1 @@
+{"name": "deploy", "description": "部署最佳實踐 — Railway, Vercel, Docker, CI/CD", "prompt_file": "deploy.md", "auto_assign": ["devops", "infra_ops", "cloud_ops", "system_architect"]}

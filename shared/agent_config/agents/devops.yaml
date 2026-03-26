@@ -1,0 +1,8 @@
+role: devops
+model: sonnet
+max_turns: 15
+skills:
+  - deploy
+  - github-pr
+  - linear-workflow
+enabled: true

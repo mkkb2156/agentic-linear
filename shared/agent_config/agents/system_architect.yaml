@@ -1,0 +1,7 @@
+role: system_architect
+model: opus
+max_turns: 15
+skills:
+  - linear-workflow
+  - deploy
+enabled: true

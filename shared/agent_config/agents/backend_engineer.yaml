@@ -1,0 +1,8 @@
+role: backend_engineer
+model: sonnet
+max_turns: 15
+skills:
+  - supabase
+  - github-pr
+  - linear-workflow
+enabled: true

@@ -1,0 +1,1 @@
+{"name": "github-pr", "description": "GitHub PR workflow — 教 agent 使用 github_create_repo + github_create_pr 工具", "prompt_file": "github-pr.md", "auto_assign": ["frontend_engineer", "backend_engineer", "qa_engineer", "devops", "release_manager"]}

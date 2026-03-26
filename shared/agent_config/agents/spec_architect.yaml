@@ -1,0 +1,6 @@
+role: spec_architect
+model: sonnet
+max_turns: 15
+skills:
+  - linear-workflow
+enabled: true
