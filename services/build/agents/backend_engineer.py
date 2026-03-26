@@ -72,6 +72,7 @@ async def execute(
     agent = BackendEngineer(
         claude_client, linear_client, discord_notifier,
         github_client=kwargs.get("github_client"),
+        vercel_client=kwargs.get("vercel_client"),
     )
     result = await agent.run(task)
     return result

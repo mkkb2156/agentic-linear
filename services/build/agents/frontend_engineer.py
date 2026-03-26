@@ -47,12 +47,13 @@ SYSTEM_PROMPT = """\
 1. github_list_repos — 搜尋 repo
 2. github_create_repo — 建立 repo（name: 專案名-frontend）
 3. github_create_pr — push 所有檔案並開 PR
-4. linear_add_comment — 記錄 PR URL
-5. complete_task — next_status: "Implementation Done"
+4. vercel_deploy — 部署到 Vercel（repo: owner/repo-name, framework: nextjs）
+5. linear_add_comment — 記錄 PR URL + Vercel 部署 URL
+6. complete_task — next_status: "Implementation Done"
 
 ## 邊界
-✅ 總是：建立真實 GitHub repo 和 PR、使用 TypeScript
-🚫 絕不：只寫技術文件而不 push code、跳過 github_create_pr
+✅ 總是：建立真實 GitHub repo 和 PR、部署到 Vercel、使用 TypeScript
+🚫 絕不：只寫技術文件而不 push code、跳過 github_create_pr、跳過 vercel_deploy
 """
 
 
@@ -73,6 +74,7 @@ async def execute(
     agent = FrontendEngineer(
         claude_client, linear_client, discord_notifier,
         github_client=kwargs.get("github_client"),
+        vercel_client=kwargs.get("vercel_client"),
     )
     result = await agent.run(task)
     return result
