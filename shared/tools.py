@@ -319,6 +319,33 @@ PLANNING_TOOLS = [
     TOOL_COMPLETE_TASK,
 ]
 
+TOOL_VERCEL_DEPLOY = {
+    "name": "vercel_deploy",
+    "description": (
+        "Deploy a GitHub repo to Vercel. Creates a Vercel project linked to the repo "
+        "and triggers a production deployment. Returns the deployment URL."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "repo": {
+                "type": "string",
+                "description": "GitHub repo (owner/name format, e.g. 'mkkb2156/hello-world')",
+            },
+            "project_name": {
+                "type": "string",
+                "description": "Vercel project name (optional, defaults to repo name)",
+            },
+            "framework": {
+                "type": "string",
+                "enum": ["nextjs", "vite", "remix", "astro", "nuxtjs", "static"],
+                "description": "Framework preset (default: nextjs)",
+            },
+        },
+        "required": ["repo"],
+    },
+}
+
 BUILD_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
     TOOL_LINEAR_ADD_COMMENT,
@@ -328,6 +355,7 @@ BUILD_TOOLS = [
     TOOL_GITHUB_CREATE_REPO,
     TOOL_GITHUB_CREATE_PR,
     TOOL_GITHUB_READ_FILE,
+    TOOL_VERCEL_DEPLOY,
     TOOL_COMPLETE_TASK,
 ]
 

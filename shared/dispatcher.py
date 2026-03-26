@@ -67,6 +67,7 @@ class AgentDispatcher:
         metrics_store: Any | None = None,
         config_manager: Any | None = None,
         github_client: Any | None = None,
+        vercel_client: Any | None = None,
     ) -> None:
         self._claude = claude_client
         self._linear = linear_client
@@ -74,6 +75,7 @@ class AgentDispatcher:
         self._metrics_store = metrics_store
         self._config_manager = config_manager
         self._github = github_client
+        self._vercel = vercel_client
         self._registry: dict[AgentRole, AgentHandler] = {}
         self._active_tasks: set[asyncio.Task[Any]] = set()
 
@@ -139,6 +141,7 @@ class AgentDispatcher:
             result = await handler(
                 task, self._claude, self._linear, self._discord,
                 github_client=self._github,
+                vercel_client=self._vercel,
             ) or {}
             tokens = result.get("tokens_used", 0)
             model = result.get("model_used", "")

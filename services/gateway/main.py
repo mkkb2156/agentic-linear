@@ -27,6 +27,7 @@ from shared.dispatcher import AgentDispatcher
 from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
 from shared.metrics import MetricsStore
+from shared.vercel_client import VercelClient
 
 from .agents import register_all_agents
 from .discord.bot import start_bot, stop_bot
@@ -57,6 +58,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.github_token:
         github_client = GitHubClient(settings.github_token, owner=settings.github_repo_owner)
 
+    # Vercel client (optional)
+    vercel_client: VercelClient | None = None
+    if settings.vercel_token:
+        vercel_client = VercelClient(settings.vercel_token, team_id=settings.vercel_team_id)
+
     # Metrics and config
     metrics_store = MetricsStore()
     metrics_store.load()
@@ -70,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         metrics_store=metrics_store,
         config_manager=config_manager,
         github_client=github_client,
+        vercel_client=vercel_client,
     )
     register_all_agents(dispatcher)
 
@@ -79,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.discord_notifier = discord_notifier
     app.state.dispatcher = dispatcher
     app.state.github_client = github_client
+    app.state.vercel_client = vercel_client
     app.state.metrics_store = metrics_store
     app.state.config_manager = config_manager
 
@@ -96,10 +104,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     logger.info(
-        "Gateway started (agents: %d, github: %s, owner: %s)",
+        "Gateway started (agents: %d, github: %s, vercel: %s)",
         len(dispatcher._registry),
         "CONFIGURED" if github_client else "NOT CONFIGURED",
-        settings.github_repo_owner or "(empty)",
+        "CONFIGURED" if vercel_client else "NOT CONFIGURED",
     )
     yield
 
@@ -112,6 +120,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await discord_notifier.close()
     if github_client:
         await github_client.close()
+    if vercel_client:
+        await vercel_client.close()
     logger.info("Gateway stopped")
 
 
@@ -129,4 +139,5 @@ async def health() -> dict[str, Any]:
         "agents_registered": len(dispatcher._registry),
         "agents_active": dispatcher.active_count,
         "github_configured": app.state.github_client is not None,
+        "vercel_configured": app.state.vercel_client is not None,
     }

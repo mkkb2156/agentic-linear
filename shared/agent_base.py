@@ -13,6 +13,7 @@ from shared.claude_client import ClaudeClient
 from shared.discord_notifier import DiscordNotifier
 from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
+from shared.vercel_client import VercelClient
 from shared.models import AgentRole
 
 logger = logging.getLogger(__name__)
@@ -60,11 +61,13 @@ class BaseAgent:
         linear_client: LinearClient,
         discord_notifier: DiscordNotifier,
         github_client: GitHubClient | None = None,
+        vercel_client: VercelClient | None = None,
     ) -> None:
         self.claude = claude_client
         self.linear = linear_client
         self.discord = discord_notifier
         self.github = github_client
+        self.vercel = vercel_client
 
     async def run(self, task: AgentTask) -> dict[str, Any]:
         """
@@ -322,6 +325,9 @@ class BaseAgent:
             elif tool_name == "github_read_file":
                 return await self._tool_github_read_file(tool_input), False
 
+            elif tool_name == "vercel_deploy":
+                return await self._tool_vercel_deploy(tool_input), False
+
             elif tool_name == "complete_task":
                 return tool_input, True
 
@@ -487,6 +493,16 @@ class BaseAgent:
         branch = inp.get("branch", "main")
         data = await self.github.get_file(repo, inp["path"], branch)
         return {"path": inp["path"], "content": data.get("decoded_content", "")}
+
+    async def _tool_vercel_deploy(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.vercel:
+            logger.warning("[%s] Vercel client not configured — cannot deploy", self.role)
+            return {"error": "Vercel client not configured. VERCEL_TOKEN env var is missing."}
+        repo = inp["repo"]
+        project_name = inp.get("project_name", "")
+        framework = inp.get("framework", "nextjs")
+        result = await self.vercel.deploy_repo(repo, project_name, framework)
+        return result
 
     async def _transition_status(
         self, issue_id: str, payload: dict[str, Any], next_status: str
