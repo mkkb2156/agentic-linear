@@ -46,6 +46,7 @@ async def execute(
     claude_client: ClaudeClient,
     linear_client: LinearClient,
     discord_notifier: DiscordNotifier,
+    **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process an Infra Ops task."""
     agent = InfraOps(claude_client, linear_client, discord_notifier)

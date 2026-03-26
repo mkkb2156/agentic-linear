@@ -67,8 +67,12 @@ async def execute(
     claude_client: ClaudeClient,
     linear_client: LinearClient,
     discord_notifier: DiscordNotifier,
+    **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process a Frontend Engineer task."""
-    agent = FrontendEngineer(claude_client, linear_client, discord_notifier)
+    agent = FrontendEngineer(
+        claude_client, linear_client, discord_notifier,
+        github_client=kwargs.get("github_client"),
+    )
     result = await agent.run(task)
     return result

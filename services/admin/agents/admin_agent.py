@@ -259,6 +259,7 @@ async def execute(
     claude_client: ClaudeClient,
     linear_client: LinearClient,
     discord_notifier: DiscordNotifier,
+    **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process an Admin task. metrics_store and config_manager injected via task.payload."""
     metrics_store = task.payload.get("_metrics_store")

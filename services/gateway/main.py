@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         discord_notifier,
         metrics_store=metrics_store,
         config_manager=config_manager,
+        github_client=github_client,
     )
     register_all_agents(dispatcher)
 

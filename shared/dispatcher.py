@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Type for agent handler functions
 AgentHandler = Callable[
-    [AgentTask, ClaudeClient, LinearClient, DiscordNotifier],
+    ...,
     Awaitable[dict[str, Any] | None],
 ]
 
@@ -66,12 +66,14 @@ class AgentDispatcher:
         discord_notifier: DiscordNotifier,
         metrics_store: Any | None = None,
         config_manager: Any | None = None,
+        github_client: Any | None = None,
     ) -> None:
         self._claude = claude_client
         self._linear = linear_client
         self._discord = discord_notifier
         self._metrics_store = metrics_store
         self._config_manager = config_manager
+        self._github = github_client
         self._registry: dict[AgentRole, AgentHandler] = {}
         self._active_tasks: set[asyncio.Task[Any]] = set()
 
@@ -134,7 +136,10 @@ class AgentDispatcher:
         result: dict[str, Any] = {}
         start_time = time.monotonic()
         try:
-            result = await handler(task, self._claude, self._linear, self._discord) or {}
+            result = await handler(
+                task, self._claude, self._linear, self._discord,
+                github_client=self._github,
+            ) or {}
             tokens = result.get("tokens_used", 0)
             model = result.get("model_used", "")
             logger.info(
