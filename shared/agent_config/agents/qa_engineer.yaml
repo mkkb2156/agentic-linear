@@ -1,0 +1,8 @@
+role: qa_engineer
+model: sonnet
+max_turns: 15
+skills:
+  - testing
+  - github-pr
+  - linear-workflow
+enabled: true

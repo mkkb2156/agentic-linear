@@ -423,7 +423,8 @@ class BaseAgent:
 
     async def _tool_github_list_repos(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
-            return {"error": "GitHub client not configured"}
+            logger.error("[%s] GitHub client is None! GITHUB_TOKEN likely not set in env.", self.role)
+            return {"error": "GitHub client not configured. GITHUB_TOKEN env var is missing."}
         search = inp.get("search", "")
         if search:
             repos = await self.github.search_repos(search)
@@ -438,7 +439,8 @@ class BaseAgent:
 
     async def _tool_github_create_repo(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
-            return {"error": "GitHub client not configured"}
+            logger.error("[%s] GitHub client is None! GITHUB_TOKEN likely not set in env.", self.role)
+            return {"error": "GitHub client not configured. GITHUB_TOKEN env var is missing."}
         repo = await self.github.find_or_create_repo(
             name=inp["name"],
             description=inp.get("description", ""),
@@ -453,7 +455,8 @@ class BaseAgent:
 
     async def _tool_github_create_pr(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
-            return {"error": "GitHub client not configured"}
+            logger.error("[%s] GitHub client is None! GITHUB_TOKEN likely not set in env.", self.role)
+            return {"error": "GitHub client not configured. GITHUB_TOKEN env var is missing."}
         repo = inp["repo"]
         branch_name = inp["branch_name"]
 
@@ -478,7 +481,8 @@ class BaseAgent:
 
     async def _tool_github_read_file(self, inp: dict[str, Any]) -> dict[str, Any]:
         if not self.github:
-            return {"error": "GitHub client not configured"}
+            logger.error("[%s] GitHub client is None! GITHUB_TOKEN likely not set in env.", self.role)
+            return {"error": "GitHub client not configured. GITHUB_TOKEN env var is missing."}
         repo = inp["repo"]
         branch = inp.get("branch", "main")
         data = await self.github.get_file(repo, inp["path"], branch)

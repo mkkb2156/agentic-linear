@@ -1,0 +1,6 @@
+role: product_strategist
+model: sonnet
+max_turns: 15
+skills:
+  - linear-workflow
+enabled: true

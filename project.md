@@ -119,13 +119,19 @@ Alert Triggered → Infra Ops
 - Agent tools: github_create_pr, github_read_file, github_list_repos, github_create_repo
 - Config: github_token, github_repo_owner, vercel_token, supabase_access_token
 
-### 🔨 Phase 8 — Admin Agent + Self-Learning (In Progress)
-- [ ] Metrics persistence (AgentRunRecord + MetricsStore → data/metrics.json)
-- [ ] Agent Config system (claude.md + skills/*.md + agents/*.yaml)
-- [ ] Skills loading in BaseAgent (auto-enhanced system prompts)
-- [ ] Admin Agent (#11) — query metrics, manage configs, generate reports
-- [ ] Self-learning loop (capture → trigger every 10 runs → Admin analyzes + optimizes)
-- [ ] /admin Discord command (report / config / learn)
+### ✅ Phase 8 — Admin Agent + Self-Learning (Complete)
+- MetricsStore: records every agent run (tokens, duration, success) → data/metrics.json
+- AgentConfigManager: claude.md + skills/*.md + agents/*.yaml
+- Skills loading in BaseAgent (auto-enhanced system prompts)
+- Admin Agent (#11, 🛡️ 管理官) — query metrics, manage configs, generate reports
+- Self-learning loop (capture failures/high-token → auto-trigger Admin every 10 runs)
+- /admin Discord command (report / config / learn)
+- 6 core skills installed: nextjs, supabase, github-pr, testing, deploy, linear-workflow
+- 11 agent YAML configs with skill assignments
+- All agent prompts rewritten (structured format, tool usage instructions, boundaries)
+- Frontend/Backend engineers explicitly use github_create_repo + github_create_pr
+- DevOps/Release Manager explicitly don't claim deployment/release done
+- 40 tests passing
 
 ---
 
@@ -280,7 +286,13 @@ Tests: health check, webhook delivery, idempotency, signature validation, DAG en
 **Issue:** DRO-20 (Pipeline complete — 8 agents produced full design docs)
 **Next:** Implement Admin Agent + Skills engine (Phase 8)
 
+### QRBro (Pipeline Test)
+**Project:** 設計一個 qrcode 生成以及使用管理的網站
+**Issue:** DRO-31 (Pipeline Complete — 8 agents, design docs)
+**Sub-issues:** DRO-32~41 (Backend/Frontend build tasks)
+
 ### Gateway
 **URL:** `agentic-linear.up.railway.app`
-**Health:** `/health` → agents_registered: 10, agents_active: N
-**Discord:** `/project`, `/run`, `/status`, `/agent`
+**Health:** `/health` → agents_registered: 11, agents_active: N
+**Discord:** `/project`, `/run`, `/status`, `/agent`, `/admin`, `/skill`
+**Skills:** 6 installed (nextjs, supabase, github-pr, testing, deploy, linear-workflow)

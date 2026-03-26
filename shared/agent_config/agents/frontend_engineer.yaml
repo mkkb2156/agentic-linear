@@ -1,0 +1,8 @@
+role: frontend_engineer
+model: sonnet
+max_turns: 15
+skills:
+  - nextjs
+  - github-pr
+  - linear-workflow
+enabled: true

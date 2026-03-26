@@ -1,0 +1,1 @@
+{"name": "linear-workflow", "description": "Linear 工作流程最佳實踐", "prompt_file": "linear-workflow.md", "auto_assign": ["product_strategist", "spec_architect", "system_architect", "frontend_engineer", "backend_engineer", "qa_engineer", "devops", "release_manager", "infra_ops", "cloud_ops", "admin"]}
