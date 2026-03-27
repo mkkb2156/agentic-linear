@@ -139,37 +139,43 @@ class ConversationListener:
         elif intent.intent == "irrelevant":
             pass
 
+    async def _find_issue_by_identifier(self, identifier: str) -> dict[str, Any] | None:
+        """Find a Linear issue by identifier like 'DRO-44'. Returns issue dict or None."""
+        import re
+        match = re.match(r"([A-Z]+)-(\d+)", identifier.upper())
+        if not match:
+            return None
+        team_key, number = match.group(1), int(match.group(2))
+        try:
+            issues = await self._linear.query_issues(
+                {"number": {"eq": number}, "team": {"key": {"eq": team_key}}}
+            )
+            return issues[0] if issues else None
+        except Exception as e:
+            logger.error("Failed to find issue %s: %s", identifier, e)
+            return None
+
     async def _handle_question(self, message: discord.Message, intent: Any) -> None:
-        # Try to find the issue and report status
         if intent.target_issue:
-            try:
-                issues = await self._linear.query_issues(
-                    {"identifier": {"eq": intent.target_issue}}
+            issue = await self._find_issue_by_identifier(intent.target_issue)
+            if issue:
+                state = issue.get("state", {}).get("name", "Unknown")
+                title = issue.get("title", "N/A")
+                await message.reply(
+                    f"**{issue.get('identifier', intent.target_issue)}**: {title}\n"
+                    f"狀態: **{state}**"
                 )
-                if issues:
-                    issue = issues[0]
-                    state = issue.get("state", {}).get("name", "Unknown")
-                    title = issue.get("title", "N/A")
-                    await message.reply(
-                        f"**{issue.get('identifier', intent.target_issue)}**: {title}\n"
-                        f"狀態: **{state}**"
-                    )
-                    return
-            except Exception as e:
-                logger.error("Failed to query issue: %s", e)
+                return
         await message.reply(f"正在查詢... ({intent.summary})")
 
     async def _handle_feedback(self, message: discord.Message, intent: Any) -> None:
         identifier = intent.target_issue  # e.g. "DRO-44"
-        try:
-            issues = await self._linear.query_issues(
-                {"identifier": {"eq": identifier}}
-            )
-            if not issues:
-                await message.reply(f"找不到 issue: {identifier}")
-                return
+        issue = await self._find_issue_by_identifier(identifier)
+        if not issue:
+            await message.reply(f"找不到 issue: {identifier}")
+            return
 
-            issue = issues[0]
+        try:
             issue_uuid = issue["id"]
             current_status = issue.get("state", {}).get("name", "Unknown")
 

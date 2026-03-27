@@ -61,7 +61,7 @@ class ClaudeClient:
         return response, tokens_used, model
 
     async def _call_with_retry(
-        self, max_retries: int = 3, **kwargs: Any
+        self, max_retries: int = 5, **kwargs: Any
     ) -> anthropic.types.Message:
         """Call Claude API with exponential backoff on 429/529."""
         for attempt in range(max_retries + 1):
@@ -71,12 +71,13 @@ class ClaudeClient:
                 if attempt == max_retries:
                     raise
                 wait = 2 ** (attempt + 1)
-                logger.warning("Rate limited, retrying in %ds (attempt %d)", wait, attempt + 1)
+                logger.warning("Rate limited, retrying in %ds (attempt %d/%d)", wait, attempt + 1, max_retries)
                 await asyncio.sleep(wait)
-            except anthropic.InternalServerError:
+            except (anthropic.InternalServerError, anthropic.APIStatusError) as e:
+                # Catch 529 Overloaded (OverloadedError inherits APIStatusError)
                 if attempt == max_retries:
                     raise
-                wait = 2 ** (attempt + 1)
-                logger.warning("Server overloaded, retrying in %ds (attempt %d)", wait, attempt + 1)
+                wait = min(2 ** (attempt + 1), 30)  # Cap at 30s
+                logger.warning("API error (%s), retrying in %ds (attempt %d/%d)", type(e).__name__, wait, attempt + 1, max_retries)
                 await asyncio.sleep(wait)
         raise RuntimeError("Unreachable")
