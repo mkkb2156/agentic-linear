@@ -346,6 +346,42 @@ TOOL_VERCEL_DEPLOY = {
     },
 }
 
+TOOL_GITHUB_MERGE_PR = {
+    "name": "github_merge_pr",
+    "description": "Merge a pull request after review passes.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "repo": {"type": "string", "description": "Repository (owner/name)"},
+            "pr_number": {"type": "integer", "description": "Pull request number"},
+            "merge_method": {
+                "type": "string",
+                "enum": ["merge", "squash", "rebase"],
+                "description": "Merge method (default: squash)",
+            },
+        },
+        "required": ["repo", "pr_number"],
+    },
+}
+
+TOOL_VERCEL_CHECK_DEPLOY = {
+    "name": "vercel_check_deploy",
+    "description": (
+        "Check Vercel deployment status and get build logs if failed. "
+        "Use after vercel_deploy or after merging a PR to verify deployment succeeded."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "project_name": {
+                "type": "string",
+                "description": "Vercel project name",
+            },
+        },
+        "required": ["project_name"],
+    },
+}
+
 BUILD_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
     TOOL_LINEAR_ADD_COMMENT,
@@ -355,15 +391,21 @@ BUILD_TOOLS = [
     TOOL_GITHUB_CREATE_REPO,
     TOOL_GITHUB_CREATE_PR,
     TOOL_GITHUB_READ_FILE,
+    TOOL_GITHUB_MERGE_PR,
     TOOL_VERCEL_DEPLOY,
+    TOOL_VERCEL_CHECK_DEPLOY,
     TOOL_COMPLETE_TASK,
 ]
 
 VERIFY_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
     TOOL_LINEAR_ADD_COMMENT,
+    TOOL_LINEAR_CREATE_ISSUE,
     TOOL_LINEAR_QUERY_ISSUES,
     TOOL_DISCORD_NOTIFY,
+    TOOL_GITHUB_READ_FILE,
+    TOOL_GITHUB_MERGE_PR,
+    TOOL_VERCEL_CHECK_DEPLOY,
     TOOL_COMPLETE_TASK,
 ]
 

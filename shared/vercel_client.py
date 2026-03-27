@@ -125,3 +125,43 @@ class VercelClient:
             "dashboard": f"https://vercel.com/{name}",
             "note": "GitHub repo linked — auto-deploys on every push to main",
         }
+
+    async def get_deployments(
+        self, project_name: str, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """Get recent deployments for a project."""
+        resp = await self._client.get(
+            "/v6/deployments",
+            params={**self._params(), "projectId": project_name, "limit": limit},
+        )
+        resp.raise_for_status()
+        deployments = resp.json().get("deployments", [])
+        return [
+            {
+                "id": d.get("uid", ""),
+                "url": d.get("url", ""),
+                "state": d.get("state", ""),  # READY, ERROR, BUILDING, QUEUED
+                "created": d.get("created", ""),
+                "target": d.get("target", ""),
+                "error_message": d.get("errorMessage", ""),
+            }
+            for d in deployments
+        ]
+
+    async def get_build_logs(self, deployment_id: str) -> str:
+        """Get build logs for a specific deployment."""
+        resp = await self._client.get(
+            f"/v2/deployments/{deployment_id}/events",
+            params=self._params(),
+        )
+        if resp.status_code != 200:
+            return f"Failed to fetch logs: {resp.status_code}"
+        events = resp.json()
+        # Extract log lines
+        lines = []
+        for event in events:
+            if event.get("type") == "stdout" or event.get("type") == "stderr":
+                text = event.get("payload", {}).get("text", event.get("text", ""))
+                if text:
+                    lines.append(text)
+        return "\n".join(lines[-50:])  # Last 50 lines

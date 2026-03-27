@@ -328,6 +328,12 @@ class BaseAgent:
             elif tool_name == "vercel_deploy":
                 return await self._tool_vercel_deploy(tool_input), False
 
+            elif tool_name == "vercel_check_deploy":
+                return await self._tool_vercel_check_deploy(tool_input), False
+
+            elif tool_name == "github_merge_pr":
+                return await self._tool_github_merge_pr(tool_input), False
+
             elif tool_name == "complete_task":
                 return tool_input, True
 
@@ -503,6 +509,41 @@ class BaseAgent:
         framework = inp.get("framework", "nextjs")
         result = await self.vercel.deploy_repo(repo, project_name, framework)
         return result
+
+    async def _tool_vercel_check_deploy(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.vercel:
+            logger.warning("[%s] Vercel client not configured", self.role)
+            return {"error": "Vercel client not configured."}
+        project_name = inp["project_name"]
+        deployments = await self.vercel.get_deployments(project_name, limit=3)
+        if not deployments:
+            return {"status": "NO_DEPLOYMENTS", "project_name": project_name}
+
+        latest = deployments[0]
+        result: dict[str, Any] = {
+            "project_name": project_name,
+            "status": latest["state"],
+            "url": latest.get("url", ""),
+            "deployment_id": latest.get("id", ""),
+        }
+
+        # If failed, fetch build logs
+        if latest["state"] == "ERROR":
+            logs = await self.vercel.get_build_logs(latest["id"])
+            result["build_logs"] = logs
+            result["error_message"] = latest.get("error_message", "")
+
+        return result
+
+    async def _tool_github_merge_pr(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self.github:
+            logger.warning("[%s] GitHub client not configured", self.role)
+            return {"error": "GitHub client not configured."}
+        repo = inp["repo"]
+        pr_number = inp["pr_number"]
+        method = inp.get("merge_method", "squash")
+        result = await self.github.merge_pull_request(repo, pr_number, method)
+        return {"success": True, "merged": True, "sha": result.get("sha", "")}
 
     async def _transition_status(
         self, issue_id: str, payload: dict[str, Any], next_status: str

@@ -45,15 +45,26 @@ SYSTEM_PROMPT = """\
 
 ## 工具使用順序（嚴格遵守）
 1. github_list_repos — 搜尋 repo
-2. github_create_repo — 建立 repo（name: 專案名-frontend）
+2. github_create_repo — 建立 repo（如不存在）
 3. github_create_pr — push 所有檔案並開 PR
-4. vercel_deploy — 部署到 Vercel（repo: owner/repo-name, framework: nextjs）
-5. linear_add_comment — 記錄 PR URL + Vercel 部署 URL
-6. complete_task — next_status: "Implementation Done"
+4. github_merge_pr — merge PR 到 main
+5. vercel_deploy — 部署到 Vercel（repo: owner/repo-name）
+6. vercel_check_deploy — 等待 30 秒後檢查部署狀態
+7. 如果部署失敗（status: ERROR）：
+   a. 讀取 build_logs 分析錯誤原因
+   b. github_create_pr — 建立修復 PR
+   c. github_merge_pr — merge 修復 PR
+   d. vercel_check_deploy — 再次檢查
+8. linear_add_comment — 記錄 PR URL + Vercel URL + 部署狀態
+9. complete_task — next_status: "Implementation Done"
+
+## 重要：Next.js 14 限制
+- 配置檔用 next.config.mjs（不是 .ts，Next.js 14 不支援 .ts 配置）
+- Tailwind 配置用 tailwind.config.js 或 tailwind.config.ts
 
 ## 邊界
-✅ 總是：建立真實 GitHub repo 和 PR、部署到 Vercel、使用 TypeScript
-🚫 絕不：只寫技術文件而不 push code、跳過 github_create_pr、跳過 vercel_deploy
+✅ 總是：建立真實 GitHub repo 和 PR、merge PR、部署到 Vercel、驗證部署成功
+🚫 絕不：只寫技術文件而不 push code、跳過部署驗證、使用 next.config.ts
 """
 
 
