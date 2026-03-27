@@ -74,8 +74,16 @@ class AgentConfigManager:
 
     # ---- System prompt building ----
 
-    def build_system_prompt(self, role: str, base_prompt: str) -> str:
-        """Combine claude.md + skills + base_prompt into final system prompt."""
+    def build_system_prompt(
+        self,
+        role: str,
+        base_prompt: str,
+        *,
+        soul_content: str = "",
+        project_context: str = "",
+        conversation_context: str = "",
+    ) -> str:
+        """Combine claude.md + skills + soul + project context + conversation + base_prompt."""
         parts: list[str] = []
 
         # 1. Global rules (claude.md)
@@ -87,11 +95,23 @@ class AgentConfigManager:
         config = self.load_agent_config(role)
         if config and config.skills:
             for skill_name in config.skills:
-                skill_content = self.read_skill(skill_name)
-                if skill_content:
-                    parts.append(f"## Skill: {skill_name}\n\n{skill_content}")
+                skill_content_str = self.read_skill(skill_name)
+                if skill_content_str:
+                    parts.append(f"## Skill: {skill_name}\n\n{skill_content_str}")
 
-        # 3. Base prompt (hardcoded in agent class)
+        # 3. Agent Soul (cross-project experience)
+        if soul_content:
+            parts.append(f"## 你的經驗記憶（跨專案）\n\n{soul_content}")
+
+        # 4. Project Context (project-specific memory)
+        if project_context:
+            parts.append(f"## 專案脈絡\n\n{project_context}")
+
+        # 5. Discord conversation context
+        if conversation_context:
+            parts.append(f"## Discord 對話脈絡\n\n{conversation_context}")
+
+        # 6. Base prompt (hardcoded in agent class)
         parts.append(base_prompt)
 
         return "\n\n---\n\n".join(parts)
