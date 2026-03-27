@@ -164,3 +164,12 @@ AGENT_IDENTITIES: dict[AgentRole, dict[str, str]] = {
         "avatar_url": f"{_AVATAR_BASE}admin&backgroundColor=FFD700",
     },
 }
+
+# Agent personas for Discord webhook messages (username + avatar for conversational mode)
+AGENT_PERSONAS: dict[AgentRole, dict[str, str]] = {
+    role: {
+        "username": identity["name"],
+        "avatar_url": identity["avatar_url"],
+    }
+    for role, identity in AGENT_IDENTITIES.items()
+}

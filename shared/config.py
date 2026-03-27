@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # Supabase Management
     supabase_access_token: str = ""
 
+    # Conversational agent settings
+    listen_channels: str = "project-requests,agent-war-room"
+    agent_ask_timeout_minutes: int = 30
+    dream_soul_threshold: int = 10
+    dream_project_threshold: int = 5
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
