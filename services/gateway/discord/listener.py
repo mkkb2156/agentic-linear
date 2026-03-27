@@ -140,13 +140,97 @@ class ConversationListener:
             pass
 
     async def _handle_question(self, message: discord.Message, intent: Any) -> None:
+        # Try to find the issue and report status
+        if intent.target_issue:
+            try:
+                issues = await self._linear.query_issues(
+                    {"identifier": {"eq": intent.target_issue}}
+                )
+                if issues:
+                    issue = issues[0]
+                    state = issue.get("state", {}).get("name", "Unknown")
+                    title = issue.get("title", "N/A")
+                    await message.reply(
+                        f"**{issue.get('identifier', intent.target_issue)}**: {title}\n"
+                        f"狀態: **{state}**"
+                    )
+                    return
+            except Exception as e:
+                logger.error("Failed to query issue: %s", e)
         await message.reply(f"正在查詢... ({intent.summary})")
 
     async def _handle_feedback(self, message: discord.Message, intent: Any) -> None:
-        await message.reply(f"收到回饋，正在更新 {intent.target_issue}...")
+        identifier = intent.target_issue  # e.g. "DRO-44"
+        try:
+            issues = await self._linear.query_issues(
+                {"identifier": {"eq": identifier}}
+            )
+            if not issues:
+                await message.reply(f"找不到 issue: {identifier}")
+                return
+
+            issue = issues[0]
+            issue_uuid = issue["id"]
+            current_status = issue.get("state", {}).get("name", "Unknown")
+
+            # Parse target status from message if mentioned, otherwise re-trigger current
+            target_status = self._extract_status(message.content) or current_status
+            await self._linear.transition_issue(issue_uuid, target_status)
+            await message.reply(
+                f"✅ 已將 **{identifier}** 重新觸發，狀態: **{target_status}**\n"
+                f"Pipeline 已啟動。"
+            )
+        except Exception as e:
+            logger.error("Failed to handle feedback for %s: %s", identifier, e)
+            await message.reply(f"處理失敗: {e}")
 
     async def _handle_agent_command(self, message: discord.Message, intent: Any) -> None:
-        await message.reply(f"正在派遣 {intent.target_agent}...")
+        from shared.agent_base import AgentTask
+        from shared.models import AgentRole
+        import uuid
+
+        try:
+            role = AgentRole(intent.target_agent)
+        except ValueError:
+            valid = ", ".join(r.value for r in AgentRole)
+            await message.reply(f"未知的 Agent: `{intent.target_agent}`\n可用: {valid}")
+            return
+
+        task = AgentTask(
+            issue_id=f"discord-{uuid.uuid4().hex[:8]}",
+            agent_role=intent.target_agent,
+            payload={
+                "event": {"data": {}},
+                "old_status": "Manual",
+                "new_status": "Manual",
+                "prompt": message.content,
+            },
+        )
+
+        dispatched = await self._dispatcher.dispatch(role, task)
+        if dispatched:
+            await message.reply(f"已派遣 **{intent.target_agent}** 處理你的請求。")
+        else:
+            await message.reply(f"無法派遣 `{intent.target_agent}`，可能未註冊或重複請求。")
+
+    @staticmethod
+    def _extract_status(text: str) -> str:
+        """Try to extract a pipeline status name from natural language."""
+        status_keywords = {
+            "Strategy Complete": ["strategy complete", "策略完成"],
+            "Spec Complete": ["spec complete", "規格完成", "spec"],
+            "Architecture Complete": ["architecture complete", "架構完成", "architecture"],
+            "Implementation Done": ["implementation done", "實作完成", "implementation"],
+            "QA Passed": ["qa passed", "qa", "測試通過"],
+            "Deployed": ["deployed", "已部署", "deploy"],
+            "Deploy Complete": ["deploy complete", "部署完成"],
+        }
+        lower = text.lower()
+        for status, keywords in status_keywords.items():
+            for kw in keywords:
+                if kw in lower:
+                    return status
+        return ""
 
     async def _create_project_from_dm(self, message: discord.Message) -> None:
         user_id = str(message.author.id)
