@@ -33,6 +33,44 @@ class EventRouter:
     def __init__(self, dispatcher: AgentDispatcher) -> None:
         self._dispatcher = dispatcher
 
+    async def _ensure_thread(self, issue_id: str, issue_title: str, project_id: str) -> str | None:
+        """Create or find a Discord thread for this issue. Returns thread_id or None."""
+        from shared.conversation_store import ConversationStore
+
+        store = getattr(self._dispatcher, "_conversation_store", None)
+        if not isinstance(store, ConversationStore):
+            return None
+
+        # Check if thread already exists for this issue
+        existing = store.get_thread_by_issue(issue_id)
+        if existing:
+            return existing.thread_id
+
+        # Create thread via Discord bot
+        try:
+            from services.gateway.discord.bot import _bot
+            if not _bot:
+                return None
+
+            for guild in _bot.guilds:
+                for channel in guild.text_channels:
+                    if channel.name == "agent-war-room":
+                        thread = await channel.create_thread(
+                            name=f"[{issue_id}] {issue_title[:80]}",
+                            auto_archive_duration=10080,  # 7 days
+                        )
+                        thread_id = str(thread.id)
+                        store.create_thread(
+                            thread_id,
+                            issue_id=issue_id,
+                            project_id=project_id,
+                        )
+                        logger.info("Created thread %s for issue %s", thread_id, issue_id)
+                        return thread_id
+        except Exception as e:
+            logger.error("Failed to create thread for %s: %s", issue_id, e)
+        return None
+
     async def route(self, event: LinearWebhookPayload, delivery_id: str | None = None) -> int:
         """
         Route a Linear webhook event to the appropriate agent(s).
@@ -73,6 +111,13 @@ class EventRouter:
             return 0
 
         issue_id = event.data.get("identifier", event.data.get("id", "unknown"))
+        issue_title = event.data.get("title", issue_id)
+        project = event.data.get("project", {}) or {}
+        project_id = project.get("id", "")
+
+        # Ensure a Discord thread exists for this issue
+        thread_id = await self._ensure_thread(issue_id, issue_title, project_id)
+
         dispatched = 0
 
         for transition in transitions:
@@ -83,6 +128,8 @@ class EventRouter:
                     "event": event.model_dump(),
                     "old_status": old_state,
                     "new_status": new_state,
+                    "thread_id": thread_id,
+                    "project_id": project_id,
                 },
             )
 
