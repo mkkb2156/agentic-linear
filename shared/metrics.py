@@ -44,6 +44,7 @@ class MetricsStore:
         self._flush_path = flush_path or DEFAULT_FLUSH_PATH
         self._flush_every = flush_every
         self._run_counter = 0
+        self._dream_counters: dict[str, int] = {}  # role/project_id → runs since last dream
 
     @property
     def run_count(self) -> int:
@@ -105,6 +106,16 @@ class MetricsStore:
         if until:
             results = [r for r in results if r.timestamp <= until]
         return results
+
+    def increment_dream_counter(self, key: str) -> int:
+        self._dream_counters[key] = self._dream_counters.get(key, 0) + 1
+        return self._dream_counters[key]
+
+    def reset_dream_counter(self, key: str) -> None:
+        self._dream_counters[key] = 0
+
+    def get_dream_counter(self, key: str) -> int:
+        return self._dream_counters.get(key, 0)
 
     def aggregate(
         self,

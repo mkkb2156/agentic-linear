@@ -76,6 +76,10 @@ class AgentDispatcher:
         self._config_manager = config_manager
         self._github = github_client
         self._vercel = vercel_client
+        self._conversation_store = None  # Set externally
+        self._soul_manager = None  # Set externally
+        self._project_context = None  # Set externally
+        self._dream_consolidator = None  # Set externally
         self._registry: dict[AgentRole, AgentHandler] = {}
         self._active_tasks: set[asyncio.Task[Any]] = set()
 
@@ -87,6 +91,18 @@ class AgentDispatcher:
         """Register multiple handlers from a {role_str: handler} dict."""
         for role_str, handler in registry.items():
             self._registry[AgentRole(role_str)] = handler
+
+    def set_memory_components(
+        self,
+        conversation_store: Any = None,
+        soul_manager: Any = None,
+        project_context: Any = None,
+        dream_consolidator: Any = None,
+    ) -> None:
+        self._conversation_store = conversation_store
+        self._soul_manager = soul_manager
+        self._project_context = project_context
+        self._dream_consolidator = dream_consolidator
 
     async def dispatch(
         self,
@@ -138,6 +154,10 @@ class AgentDispatcher:
         result: dict[str, Any] = {}
         start_time = time.monotonic()
         try:
+            # Inject memory context into agent via task payload
+            task.payload["_conversation_store"] = self._conversation_store
+            task.payload["_project_context"] = self._project_context
+            task.payload["_soul_manager"] = self._soul_manager
             result = await handler(
                 task, self._claude, self._linear, self._discord,
                 github_client=self._github,
@@ -188,6 +208,10 @@ class AgentDispatcher:
                     f"{agent_role} | {task.issue_id} | {tag} | {tokens} tokens | {summary_text[:100]}"
                 )
 
+            # Trigger dream consolidation if thresholds met
+            project_id = task.payload.get("project_id", "")
+            await self._maybe_dream(str(agent_role), project_id)
+
             # Auto-trigger learning review every 10 runs
             if (self._metrics_store
                 and self._metrics_store.run_count % 10 == 0
@@ -205,6 +229,26 @@ class AgentDispatcher:
                         self._run_agent(AR.ADMIN, admin_handler, learn_task),
                         name=f"admin:learn:{self._metrics_store.run_count}",
                     )
+
+    async def _maybe_dream(self, agent_role: str, project_id: str = "") -> None:
+        if not self._metrics_store or not self._dream_consolidator:
+            return
+
+        from shared.config import get_settings
+        settings = get_settings()
+
+        soul_count = self._metrics_store.increment_dream_counter(f"soul:{agent_role}")
+        if soul_count >= settings.dream_soul_threshold:
+            asyncio.create_task(self._dream_consolidator.dream_soul(agent_role))
+            self._metrics_store.reset_dream_counter(f"soul:{agent_role}")
+            logger.info("Dream triggered for agent soul: %s", agent_role)
+
+        if project_id:
+            proj_count = self._metrics_store.increment_dream_counter(f"project:{project_id}")
+            if proj_count >= settings.dream_project_threshold:
+                asyncio.create_task(self._dream_consolidator.dream_project(project_id))
+                self._metrics_store.reset_dream_counter(f"project:{project_id}")
+                logger.info("Dream triggered for project: %s", project_id)
 
     async def shutdown(self) -> None:
         """Wait for all active agent tasks to complete."""
