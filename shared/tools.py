@@ -309,7 +309,83 @@ TOOL_GENERATE_REPORT = {
     },
 }
 
+TOOL_DISCORD_ASK_USER = {
+    "name": "discord_ask_user",
+    "description": "Ask the user a question in the Discord thread and wait for their reply. Use when you need clarification or a decision.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "The question to ask the user (in 繁體中文)",
+            },
+            "urgent": {
+                "type": "boolean",
+                "description": "If true, ping the user multiple times (default: false)",
+            },
+        },
+        "required": ["question"],
+    },
+}
+
+TOOL_DISCORD_DISCUSS = {
+    "name": "discord_discuss",
+    "description": "Post a message in the Discord thread to discuss with other agents or share observations. Does not wait for reply.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "The message to post (in 繁體中文)",
+            },
+        },
+        "required": ["message"],
+    },
+}
+
+TOOL_DISCORD_REPORT_BLOCKER = {
+    "name": "discord_report_blocker",
+    "description": "Report a blocking issue that requires user decision. Pings the user and waits for reply.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string",
+                "description": "Description of the blocker and what decision is needed",
+            },
+        },
+        "required": ["description"],
+    },
+}
+
+TOOL_UPDATE_PROJECT_CONTEXT = {
+    "name": "update_project_context",
+    "description": "Record an important project decision, requirement, or constraint for other agents to reference.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "category": {
+                "type": "string",
+                "enum": ["requirement", "decision", "constraint", "user_preference"],
+                "description": "Category of the information",
+            },
+            "content": {
+                "type": "string",
+                "description": "The information to record (in 繁體中文)",
+            },
+        },
+        "required": ["category", "content"],
+    },
+}
+
 # Tool sets per agent type
+CONVERSATIONAL_TOOLS = [
+    TOOL_DISCORD_ASK_USER,
+    TOOL_DISCORD_DISCUSS,
+    TOOL_DISCORD_REPORT_BLOCKER,
+    TOOL_UPDATE_PROJECT_CONTEXT,
+]
+
 PLANNING_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
     TOOL_LINEAR_ADD_COMMENT,
@@ -317,7 +393,7 @@ PLANNING_TOOLS = [
     TOOL_LINEAR_QUERY_ISSUES,
     TOOL_DISCORD_NOTIFY,
     TOOL_COMPLETE_TASK,
-]
+] + CONVERSATIONAL_TOOLS
 
 TOOL_VERCEL_DEPLOY = {
     "name": "vercel_deploy",
@@ -395,7 +471,7 @@ BUILD_TOOLS = [
     TOOL_VERCEL_DEPLOY,
     TOOL_VERCEL_CHECK_DEPLOY,
     TOOL_COMPLETE_TASK,
-]
+] + CONVERSATIONAL_TOOLS
 
 VERIFY_TOOLS = [
     TOOL_LINEAR_UPDATE_ISSUE,
@@ -407,7 +483,7 @@ VERIFY_TOOLS = [
     TOOL_GITHUB_MERGE_PR,
     TOOL_VERCEL_CHECK_DEPLOY,
     TOOL_COMPLETE_TASK,
-]
+] + CONVERSATIONAL_TOOLS
 
 ADMIN_TOOLS = [
     TOOL_QUERY_METRICS,

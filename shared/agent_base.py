@@ -68,6 +68,10 @@ class BaseAgent:
         self.discord = discord_notifier
         self.github = github_client
         self.vercel = vercel_client
+        self._conversation_store = None  # Set by dispatcher
+        self._project_context = None  # Set by dispatcher
+        self._thread_id: str | None = None  # Set by dispatcher
+        self._project_id: str | None = None  # Set by dispatcher
 
     async def run(self, task: AgentTask) -> dict[str, Any]:
         """
@@ -337,6 +341,18 @@ class BaseAgent:
             elif tool_name == "complete_task":
                 return tool_input, True
 
+            elif tool_name == "discord_ask_user":
+                return await self._tool_discord_ask_user(tool_input), False
+
+            elif tool_name == "discord_discuss":
+                return await self._tool_discord_discuss(tool_input), False
+
+            elif tool_name == "discord_report_blocker":
+                return await self._tool_discord_report_blocker(tool_input), False
+
+            elif tool_name == "update_project_context":
+                return await self._tool_update_project_context(tool_input), False
+
             else:
                 return {"error": f"Unknown tool: {tool_name}"}, False
 
@@ -569,3 +585,78 @@ class BaseAgent:
             logger.error("Failed to transition status: %s", e)
         except Exception as e:
             logger.error("Failed to transition status: %s", e)
+
+    async def _tool_discord_ask_user(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self._conversation_store or not self._thread_id:
+            return {"status": "unavailable", "reply": None}
+
+        import asyncio
+        question = inp["question"]
+        if inp.get("urgent"):
+            question = f"🔴 **緊急** {question}"
+        question = f"{question}\n\n@User 需要你的回覆"
+
+        future = asyncio.get_event_loop().create_future()
+        self._conversation_store.set_pending(
+            self._thread_id, str(self.role), question, future,
+        )
+        await self.discord.agent_speak(
+            thread_id=self._thread_id,
+            agent_role=self.role,
+            content=question,
+            conversation_store=self._conversation_store,
+        )
+
+        timeout = 30 * 60  # 30 minutes default
+        try:
+            reply = await asyncio.wait_for(future, timeout=timeout)
+            return {"status": "answered", "reply": reply}
+        except asyncio.TimeoutError:
+            self._conversation_store.clear_pending(self._thread_id, str(self.role))
+            return {"status": "timeout", "reply": None}
+
+    async def _tool_discord_discuss(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self._conversation_store or not self._thread_id:
+            return {"status": "unavailable"}
+        await self.discord.agent_speak(
+            thread_id=self._thread_id,
+            agent_role=self.role,
+            content=inp["message"],
+            conversation_store=self._conversation_store,
+        )
+        return {"status": "sent"}
+
+    async def _tool_discord_report_blocker(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self._conversation_store or not self._thread_id:
+            return {"status": "unavailable", "reply": None}
+
+        import asyncio
+        msg = f"⚠️ **Blocker**\n{inp['description']}\n\n@User 需要你的決定"
+        future = asyncio.get_event_loop().create_future()
+        self._conversation_store.set_pending(
+            self._thread_id, str(self.role), msg, future,
+        )
+        await self.discord.agent_speak(
+            thread_id=self._thread_id,
+            agent_role=self.role,
+            content=msg,
+            conversation_store=self._conversation_store,
+        )
+
+        timeout = 30 * 60
+        try:
+            reply = await asyncio.wait_for(future, timeout=timeout)
+            return {"status": "answered", "reply": reply}
+        except asyncio.TimeoutError:
+            self._conversation_store.clear_pending(self._thread_id, str(self.role))
+            return {"status": "timeout", "reply": None}
+
+    async def _tool_update_project_context(self, inp: dict[str, Any]) -> dict[str, Any]:
+        if not self._project_context or not self._project_id:
+            return {"status": "unavailable"}
+        self._project_context.append(
+            self._project_id,
+            inp["category"],
+            inp["content"],
+        )
+        return {"status": "recorded", "category": inp["category"]}
