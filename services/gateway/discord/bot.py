@@ -24,10 +24,14 @@ def create_bot(
     github_client: Any = None,
     metrics_store: Any = None,
     config_manager: Any = None,
+    conversation_store: Any = None,
+    intent_router: Any = None,
+    gatherer: Any = None,
 ) -> commands.Bot:
     intents = discord.Intents.default()
     intents.guilds = True
     intents.messages = True
+    intents.message_content = True  # Privileged intent — enable in Discord Developer Portal
 
     bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -39,16 +43,41 @@ def create_bot(
     bot.github_client = github_client  # type: ignore[attr-defined]
     bot.metrics_store = metrics_store  # type: ignore[attr-defined]
     bot.config_manager = config_manager  # type: ignore[attr-defined]
+    bot.conversation_store = conversation_store  # type: ignore[attr-defined]
+
+    _listener = None
 
     @bot.event
     async def on_ready() -> None:
+        nonlocal _listener
         logger.info("Discord bot connected as %s", bot.user)
-        # Sync slash commands
+
+        if conversation_store and intent_router and gatherer:
+            from shared.config import get_settings
+            settings = get_settings()
+            from .listener import ConversationListener
+            _listener = ConversationListener(
+                conversation_store=conversation_store,
+                intent_router=intent_router,
+                gatherer=gatherer,
+                dispatcher=dispatcher,
+                linear_client=linear_client,
+                bot_user_id=bot.user.id,
+                listen_channels=settings.listen_channels.split(","),
+            )
+            logger.info("ConversationListener initialized (channels: %s)", settings.listen_channels)
+
         try:
             synced = await bot.tree.sync()
             logger.info("Synced %d slash commands", len(synced))
         except Exception as e:
             logger.error("Failed to sync commands: %s", e)
+
+    @bot.event
+    async def on_message(message: discord.Message) -> None:
+        if _listener:
+            await _listener.handle_message(message)
+        await bot.process_commands(message)
 
     setup_commands(bot)
     return bot
@@ -64,6 +93,9 @@ async def start_bot(
     github_client: Any = None,
     metrics_store: Any = None,
     config_manager: Any = None,
+    conversation_store: Any = None,
+    intent_router: Any = None,
+    gatherer: Any = None,
 ) -> None:
     global _bot, _bot_task
     _bot = create_bot(
@@ -74,6 +106,9 @@ async def start_bot(
         github_client=github_client,
         metrics_store=metrics_store,
         config_manager=config_manager,
+        conversation_store=conversation_store,
+        intent_router=intent_router,
+        gatherer=gatherer,
     )
     _bot_task = asyncio.create_task(_bot.start(token))
     logger.info("Discord bot starting...")

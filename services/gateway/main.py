@@ -33,6 +33,12 @@ from .agents import register_all_agents
 from .discord.bot import start_bot, stop_bot
 from .webhooks.linear import router as linear_router
 from .webhooks.github import router as github_router
+from shared.conversation_store import ConversationStore
+from shared.soul_manager import SoulManager
+from shared.project_context import ProjectContextManager
+from shared.dream import DreamConsolidator
+from .discord.intent_router import IntentRouter
+from .discord.gatherer import MultiTurnGatherer
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +74,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     metrics_store.load()
     config_manager = AgentConfigManager()
 
+    # Conversation + memory components
+    conversation_store = ConversationStore()
+    conversation_store.load()
+    soul_manager = SoulManager()
+    project_context_manager = ProjectContextManager()
+    dream_consolidator = DreamConsolidator(
+        api_key=settings.anthropic_api_key,
+        soul_manager=soul_manager,
+        project_context_manager=project_context_manager,
+        learnings_reader=config_manager.read_learnings,
+    )
+    intent_router = IntentRouter(api_key=settings.anthropic_api_key)
+    gatherer = MultiTurnGatherer(
+        api_key=settings.anthropic_api_key,
+        conversation_store=conversation_store,
+    )
+
     # Agent dispatcher (replaces database task queue)
     dispatcher = AgentDispatcher(
         claude_client,
@@ -80,6 +103,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     register_all_agents(dispatcher)
 
+    dispatcher.set_memory_components(
+        conversation_store=conversation_store,
+        soul_manager=soul_manager,
+        project_context=project_context_manager,
+        dream_consolidator=dream_consolidator,
+    )
+
     # Store on app.state for request handlers
     app.state.linear_client = linear_client
     app.state.claude_client = claude_client
@@ -89,6 +119,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.vercel_client = vercel_client
     app.state.metrics_store = metrics_store
     app.state.config_manager = config_manager
+    app.state.conversation_store = conversation_store
+    app.state.soul_manager = soul_manager
+    app.state.project_context_manager = project_context_manager
+    app.state.dream_consolidator = dream_consolidator
 
     # Start Discord bot (non-blocking)
     if settings.discord_bot_token:
@@ -101,6 +135,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             github_client=github_client,
             metrics_store=metrics_store,
             config_manager=config_manager,
+            conversation_store=conversation_store,
+            intent_router=intent_router,
+            gatherer=gatherer,
         )
 
     logger.info(
@@ -122,6 +159,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await github_client.close()
     if vercel_client:
         await vercel_client.close()
+    await intent_router.close()
+    await gatherer.close()
+    await dream_consolidator.close()
     logger.info("Gateway stopped")
 
 
