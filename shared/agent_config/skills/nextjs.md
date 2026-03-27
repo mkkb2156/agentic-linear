@@ -1,5 +1,10 @@
 # Next.js 14 App Router 最佳實踐
 
+## ⚠️ 重要限制（Next.js 14）
+- **配置檔必須用 `next.config.mjs`**（不是 `.ts`，Next.js 14 不支援 TypeScript 配置）
+- `tailwind.config.js` 或 `tailwind.config.ts` 都可以
+- `postcss.config.js`（不是 `.ts`）
+
 ## 專案結構
 ```
 app/                    # App Router（每個資料夾 = 一個路由）

@@ -190,3 +190,19 @@ class GitHubClient:
         pr = resp.json()
         logger.info("Created PR #%s on %s: %s", pr.get("number"), full, title)
         return pr
+
+    async def merge_pull_request(
+        self,
+        repo: str,
+        pr_number: int,
+        merge_method: str = "squash",
+    ) -> dict[str, Any]:
+        """Merge a pull request."""
+        full = self._full_repo(repo)
+        resp = await self._client.put(
+            f"/repos/{full}/pulls/{pr_number}/merge",
+            json={"merge_method": merge_method},
+        )
+        resp.raise_for_status()
+        logger.info("Merged PR #%s on %s (method=%s)", pr_number, full, merge_method)
+        return resp.json()
