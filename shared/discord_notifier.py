@@ -198,6 +198,47 @@ class DiscordNotifier:
             },
         )
 
+    async def agent_speak(
+        self,
+        thread_id: str,
+        agent_role: AgentRole,
+        content: str,
+        conversation_store: Any | None = None,
+    ) -> dict[str, Any] | None:
+        """Send a plain text message via webhook with agent persona (for thread conversations)."""
+        url = self._webhook_urls.get("agent_hub")
+        if not url:
+            return None
+
+        identity = AGENT_IDENTITIES.get(agent_role, {})
+        payload: dict[str, Any] = {
+            "username": identity.get("name", str(agent_role)),
+            "avatar_url": identity.get("avatar_url", ""),
+            "content": content[:2000],  # Discord limit
+        }
+
+        try:
+            request_url = f"{url}?wait=true&thread_id={thread_id}"
+            resp = await self._client.post(request_url, json=payload)
+            resp.raise_for_status()
+            logger.info("Agent %s spoke in thread %s", agent_role, thread_id)
+
+            # Record in conversation store if provided
+            if conversation_store:
+                from shared.conversation_store import Message
+                from datetime import datetime, timezone
+                conversation_store.append_message(thread_id, Message(
+                    author_type="agent",
+                    author_id=str(agent_role),
+                    content=content,
+                    timestamp=datetime.now(timezone.utc),
+                ))
+
+            return resp.json()
+        except httpx.HTTPError as e:
+            logger.error("Agent speak failed: %s", e)
+            return None
+
     async def send_pipeline_milestone(
         self,
         issue_id: str,
