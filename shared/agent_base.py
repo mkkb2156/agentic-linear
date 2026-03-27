@@ -93,10 +93,36 @@ class BaseAgent:
         issue_uuid = issue.get("id", payload.get("event", {}).get("data", {}).get("id", ""))
         logger.info("[%s] issue_id=%s, issue_uuid=%s", self.role, issue_id, issue_uuid)
 
-        # Load config-enhanced system prompt (claude.md + skills + base)
+        # Extract memory components from payload (injected by dispatcher)
+        self._conversation_store = payload.pop("_conversation_store", None)
+        self._project_context = payload.pop("_project_context", None)
+        soul_manager = payload.pop("_soul_manager", None)
+        self._thread_id = payload.get("thread_id")
+        self._project_id = payload.get("project_id")
+
+        # Load config-enhanced system prompt with memory layers
         from shared.agent_config import get_config_manager
         config_mgr = get_config_manager()
-        effective_prompt = config_mgr.build_system_prompt(str(self.role), self.system_prompt)
+
+        soul_content = ""
+        if soul_manager:
+            soul_content = soul_manager.load(str(self.role))
+
+        project_context_content = ""
+        if self._project_context and self._project_id:
+            project_context_content = self._project_context.load(self._project_id)
+
+        conversation_context = ""
+        if self._conversation_store and self._thread_id:
+            conversation_context = self._conversation_store.format_for_agent(self._thread_id)
+
+        effective_prompt = config_mgr.build_system_prompt(
+            str(self.role),
+            self.system_prompt,
+            soul_content=soul_content,
+            project_context=project_context_content,
+            conversation_context=conversation_context,
+        )
 
         # Notify Discord that we're starting
         await self.discord.send_task_started(
@@ -201,6 +227,13 @@ class BaseAgent:
             tokens_used=result.get("tokens_used", 0),
             model_used=result.get("model_used", ""),
         )
+
+        # Reflect and potentially update soul
+        if soul_manager and result.get("summary"):
+            try:
+                await self._maybe_reflect(soul_manager, task, result)
+            except Exception as e:
+                logger.warning("Soul reflection failed: %s", e)
 
         return result
 
@@ -660,3 +693,37 @@ class BaseAgent:
             inp["content"],
         )
         return {"status": "recorded", "category": inp["category"]}
+
+    async def _maybe_reflect(
+        self, soul_manager: Any, task: AgentTask, result: dict[str, Any]
+    ) -> None:
+        """Use Haiku to decide if this run produced experience worth remembering."""
+        import anthropic
+
+        tokens = result.get("tokens_used", 0)
+        success = "summary" in result and result["summary"]
+        if tokens < 3000 and success:
+            return  # Routine run, skip reflection
+
+        client = anthropic.AsyncAnthropic(api_key=self.claude._client.api_key)
+        try:
+            response = await client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system="判斷這次 agent 執行是否有值得長期記住的經驗。回答 JSON: {\"worth_saving\": bool, \"category\": \"技術經驗\"|\"協作模式\"|\"踩過的坑\"|\"偏好\", \"entry\": \"簡短描述\"}",
+                messages=[{
+                    "role": "user",
+                    "content": f"Agent: {self.role}\n摘要: {result.get('summary', '')[:300]}\nTokens: {tokens}\n成功: {success}",
+                }],
+            )
+            text = response.content[0].text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            data = json.loads(text)
+            if data.get("worth_saving") and data.get("entry"):
+                soul_manager.append(str(self.role), data["category"], data["entry"])
+                logger.info("[%s] Soul updated: %s", self.role, data["entry"][:80])
+        except Exception as e:
+            logger.debug("Reflection skipped: %s", e)
+        finally:
+            await client.close()
