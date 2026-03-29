@@ -49,8 +49,13 @@ class AdminAgent(BaseAgent):
         *,
         metrics_store: MetricsStore | None = None,
         config_manager: AgentConfigManager | None = None,
+        state_tracker: Any = None,
+        db: Any = None,
     ) -> None:
-        super().__init__(claude_client, linear_client, discord_notifier)
+        super().__init__(
+            claude_client, linear_client, discord_notifier,
+            state_tracker=state_tracker, db=db,
+        )
         self._metrics = metrics_store
         self._config = config_manager
 
@@ -270,5 +275,7 @@ async def execute(
         discord_notifier,
         metrics_store=metrics_store,
         config_manager=config_manager,
+        state_tracker=kwargs.get("state_tracker"),
+        db=kwargs.get("db"),
     )
     return await agent.run(task)

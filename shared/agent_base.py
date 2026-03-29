@@ -15,6 +15,7 @@ from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
 from shared.vercel_client import VercelClient
 from shared.models import AgentRole
+from shared.agent_state import AgentStateTracker
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +63,16 @@ class BaseAgent:
         discord_notifier: DiscordNotifier,
         github_client: GitHubClient | None = None,
         vercel_client: VercelClient | None = None,
+        state_tracker: AgentStateTracker | None = None,
+        db: Any | None = None,
     ) -> None:
         self.claude = claude_client
         self.linear = linear_client
         self.discord = discord_notifier
         self.github = github_client
         self.vercel = vercel_client
+        self._state_tracker = state_tracker
+        self._db = db
         self._conversation_store = None  # Set by dispatcher
         self._project_context = None  # Set by dispatcher
         self._thread_id: str | None = None  # Set by dispatcher
@@ -124,12 +129,16 @@ class BaseAgent:
             conversation_context=conversation_context,
         )
 
-        # Notify Discord that we're starting
+        # Notify Discord + dashboard that we're starting
         await self.discord.send_task_started(
             agent_role=self.role,
             issue_id=issue_id,
             issue_title=issue_title,
         )
+        if self._state_tracker:
+            await self._state_tracker.set_running(
+                str(self.role), issue_id, issue_title,
+            )
 
         # Build initial user message
         user_message = self._build_user_message(issue, payload)
@@ -154,9 +163,11 @@ class BaseAgent:
                 # Process all tool calls in this response
                 tool_results = []
                 complete_result = None
+                last_tool_name = ""
 
                 for block in response.content:
                     if block.type == "tool_use":
+                        last_tool_name = block.name
                         tool_result, is_complete = await self._handle_tool_call(
                             block.name, block.input, issue_uuid
                         )
@@ -167,6 +178,24 @@ class BaseAgent:
                         })
                         if is_complete:
                             complete_result = tool_result
+
+                # Report turn progress to dashboard
+                if self._state_tracker:
+                    await self._state_tracker.update_turn(
+                        str(self.role), turn + 1, total_tokens, last_tool_name,
+                    )
+                # Log tool call to database
+                if self._db:
+                    try:
+                        await self._db.insert_log(
+                            agent_role=str(self.role),
+                            issue_id=issue_id,
+                            level="INFO",
+                            message=f"Turn {turn + 1}: {last_tool_name}",
+                            metadata={"turn": turn + 1, "tokens": total_tokens},
+                        )
+                    except Exception:
+                        pass  # DB logging is best-effort
 
                 # Add assistant message + tool results to conversation
                 messages.append({"role": "assistant", "content": response.content})
@@ -220,6 +249,16 @@ class BaseAgent:
                 "tokens_used": total_tokens,
                 "model_used": model_used,
             }
+
+        # Report completion to dashboard
+        if self._state_tracker:
+            await self._state_tracker.set_completed(
+                str(self.role),
+                issue_id,
+                result.get("tokens_used", 0),
+                result.get("summary", ""),
+                success=bool(result.get("summary")),
+            )
 
         # Transition Linear status if specified
         if result.get("next_status"):

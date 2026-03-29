@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     dream_soul_threshold: int = 10
     dream_project_threshold: int = 5
 
+    # Infrastructure (VPS deployment)
+    redis_url: str = "redis://localhost:6379"
+    database_url: str = ""  # PostgreSQL DSN, e.g. postgresql://user:pass@host/db
+    dispatch_mode: str = "local"  # "local" (asyncio) or "redis" (queue)
+
+    # Dashboard
+    dashboard_enabled: bool = True
+    cors_origins: str = "http://localhost:3000"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

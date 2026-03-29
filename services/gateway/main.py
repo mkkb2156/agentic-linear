@@ -1,7 +1,8 @@
-"""Gateway service — receives Linear/GitHub webhooks and dispatches agents.
+"""Gateway service — receives Linear/GitHub webhooks, dispatches agents, serves dashboard API.
 
-Single service architecture: no intermediate database queue.
-Linear is the source of truth for all task/issue management.
+Supports two dispatch modes:
+- local: agents run as asyncio background tasks (original, for dev/Railway)
+- redis: tasks published to Redis queues (VPS deployment with independent workers)
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ logging.basicConfig(
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from shared.agent_config import AgentConfigManager
 from shared.claude_client import ClaudeClient
@@ -26,7 +28,7 @@ from shared.discord_notifier import DiscordNotifier
 from shared.dispatcher import AgentDispatcher
 from shared.github_client import GitHubClient
 from shared.linear_client import LinearClient
-from shared.metrics import MetricsStore
+from shared.metrics import HybridMetricsStore, MetricsStore
 from shared.vercel_client import VercelClient
 
 from .agents import register_all_agents
@@ -39,6 +41,14 @@ from shared.project_context import ProjectContextManager
 from shared.dream import DreamConsolidator
 from .discord.intent_router import IntentRouter
 from .discord.gatherer import MultiTurnGatherer
+
+# Dashboard API routers
+from .api.agents import router as agents_api_router
+from .api.metrics import router as metrics_api_router
+from .api.memory import router as memory_api_router
+from .api.skills import router as skills_api_router
+from .api.logs import router as logs_api_router
+from .api.ws import router as ws_router
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +79,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.vercel_token:
         vercel_client = VercelClient(settings.vercel_token, team_id=settings.vercel_team_id)
 
-    # Metrics and config
-    metrics_store = MetricsStore()
+    # ── Infrastructure (Redis + PostgreSQL) ─────────────────────────────
+    redis_queue = None
+    state_tracker = None
+    db = None
+
+    if settings.redis_url:
+        try:
+            from shared.redis_queue import RedisQueue
+            redis_queue = RedisQueue()
+            await redis_queue.connect(settings.redis_url)
+            from shared.agent_state import AgentStateTracker
+            state_tracker = AgentStateTracker(redis_queue)
+        except Exception as e:
+            logger.warning("Redis not available, running without live state: %s", e)
+            redis_queue = None
+
+    if settings.database_url:
+        try:
+            from shared.database import Database
+            db = Database()
+            await db.connect(settings.database_url)
+        except Exception as e:
+            logger.warning("Database not available, using in-memory metrics: %s", e)
+            db = None
+
+    # ── Metrics and config ──────────────────────────────────────────────
+    if db:
+        metrics_store: MetricsStore = HybridMetricsStore(db=db)
+    else:
+        metrics_store = MetricsStore()
     metrics_store.load()
     config_manager = AgentConfigManager()
 
@@ -91,7 +129,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conversation_store=conversation_store,
     )
 
-    # Agent dispatcher (replaces database task queue)
+    # Agent dispatcher
     dispatcher = AgentDispatcher(
         claude_client,
         linear_client,
@@ -100,6 +138,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         config_manager=config_manager,
         github_client=github_client,
         vercel_client=vercel_client,
+        redis_queue=redis_queue,
+        db=db,
+        state_tracker=state_tracker,
+        dispatch_mode=settings.dispatch_mode,
     )
     register_all_agents(dispatcher)
 
@@ -123,6 +165,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.soul_manager = soul_manager
     app.state.project_context_manager = project_context_manager
     app.state.dream_consolidator = dream_consolidator
+    app.state.redis_queue = redis_queue
+    app.state.state_tracker = state_tracker
+    app.state.db = db
 
     # Start Discord bot (non-blocking)
     if settings.discord_bot_token:
@@ -141,10 +186,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
 
     logger.info(
-        "Gateway started (agents: %d, github: %s, vercel: %s)",
+        "Gateway started (agents: %d, mode: %s, redis: %s, db: %s, github: %s, vercel: %s)",
         len(dispatcher._registry),
-        "CONFIGURED" if github_client else "NOT CONFIGURED",
-        "CONFIGURED" if vercel_client else "NOT CONFIGURED",
+        settings.dispatch_mode,
+        "CONNECTED" if redis_queue else "OFF",
+        "CONNECTED" if db else "OFF",
+        "CONFIGURED" if github_client else "OFF",
+        "CONFIGURED" if vercel_client else "OFF",
     )
     yield
 
@@ -162,13 +210,37 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await intent_router.close()
     await gatherer.close()
     await dream_consolidator.close()
+    if redis_queue:
+        await redis_queue.close()
+    if db:
+        await db.close()
     logger.info("Gateway stopped")
 
 
 app = FastAPI(title="GDS Agent Gateway", lifespan=lifespan)
 
+# CORS for dashboard frontend
+settings = get_settings()
+if settings.dashboard_enabled:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins.split(","),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Webhook routes
 app.include_router(linear_router, prefix="/webhooks")
 app.include_router(github_router, prefix="/webhooks")
+
+# Dashboard API routes
+app.include_router(agents_api_router)
+app.include_router(metrics_api_router)
+app.include_router(memory_api_router)
+app.include_router(skills_api_router)
+app.include_router(logs_api_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")
@@ -178,6 +250,11 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "agents_registered": len(dispatcher._registry),
         "agents_active": dispatcher.active_count,
+        "dispatch_mode": getattr(app.state, "dispatcher", None)
+        and app.state.dispatcher._dispatch_mode
+        or "unknown",
+        "redis": app.state.redis_queue is not None,
+        "database": app.state.db is not None,
         "github_configured": app.state.github_client is not None,
         "vercel_configured": app.state.vercel_client is not None,
     }

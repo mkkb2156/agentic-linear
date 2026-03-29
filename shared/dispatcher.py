@@ -1,12 +1,13 @@
-"""Agent dispatcher — runs agents as background asyncio tasks.
+"""Agent dispatcher — local (asyncio) and Redis queue modes.
 
-Replaces the PostgreSQL task queue. Linear is the source of truth for task state;
-the dispatcher just executes agents when triggered by webhook events.
+Local mode: runs agents as background asyncio tasks (original behavior).
+Redis mode: publishes tasks to per-agent Redis queues (VPS deployment).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -51,7 +52,8 @@ def _check_idempotency(key: str) -> bool:
 
 class AgentDispatcher:
     """
-    Dispatches agents as background asyncio tasks.
+    Dispatches agents as background asyncio tasks (local mode)
+    or publishes to Redis queues (redis mode).
 
     Usage:
         dispatcher = AgentDispatcher(claude, linear, discord)
@@ -68,6 +70,10 @@ class AgentDispatcher:
         config_manager: Any | None = None,
         github_client: Any | None = None,
         vercel_client: Any | None = None,
+        redis_queue: Any | None = None,
+        db: Any | None = None,
+        state_tracker: Any | None = None,
+        dispatch_mode: str = "local",
     ) -> None:
         self._claude = claude_client
         self._linear = linear_client
@@ -76,6 +82,10 @@ class AgentDispatcher:
         self._config_manager = config_manager
         self._github = github_client
         self._vercel = vercel_client
+        self._redis_queue = redis_queue
+        self._db = db
+        self._state_tracker = state_tracker
+        self._dispatch_mode = dispatch_mode
         self._conversation_store = None  # Set externally
         self._soul_manager = None  # Set externally
         self._project_context = None  # Set externally
@@ -111,14 +121,11 @@ class AgentDispatcher:
         delivery_id: str | None = None,
     ) -> bool:
         """
-        Dispatch an agent to run in the background.
+        Dispatch an agent to run.
+        - local mode: runs as asyncio background task
+        - redis mode: publishes to per-agent Redis queue
         Returns True if dispatched, False if duplicate or unknown role.
         """
-        handler = self._registry.get(agent_role)
-        if not handler:
-            logger.error("No handler registered for agent role: %s", agent_role)
-            return False
-
         # Idempotency check
         if delivery_id:
             idem_key = f"{delivery_id}:{agent_role}"
@@ -126,7 +133,35 @@ class AgentDispatcher:
                 logger.info("Duplicate dispatch skipped: %s", idem_key)
                 return False
 
-        # Launch as background task
+        if self._dispatch_mode == "redis" and self._redis_queue:
+            return await self._dispatch_redis(agent_role, task)
+        return await self._dispatch_local(agent_role, task)
+
+    async def _dispatch_redis(self, agent_role: AgentRole, task: AgentTask) -> bool:
+        """Publish task to Redis queue for a remote worker to consume."""
+        # Serialize task data (exclude non-serializable memory objects)
+        task_data = {
+            "issue_id": task.issue_id,
+            "agent_role": task.agent_role,
+            "payload": {
+                k: v for k, v in task.payload.items()
+                if not k.startswith("_")  # Skip injected memory objects
+            },
+        }
+        await self._redis_queue.publish_task(str(agent_role), task_data)
+        logger.info(
+            "Published task to Redis queue:%s for issue %s",
+            agent_role, task.issue_id,
+        )
+        return True
+
+    async def _dispatch_local(self, agent_role: AgentRole, task: AgentTask) -> bool:
+        """Run agent as background asyncio task (original behavior)."""
+        handler = self._registry.get(agent_role)
+        if not handler:
+            logger.error("No handler registered for agent role: %s", agent_role)
+            return False
+
         bg_task = asyncio.create_task(
             self._run_agent(agent_role, handler, task),
             name=f"agent:{agent_role}:{task.issue_id}",
@@ -162,6 +197,8 @@ class AgentDispatcher:
                 task, self._claude, self._linear, self._discord,
                 github_client=self._github,
                 vercel_client=self._vercel,
+                state_tracker=self._state_tracker,
+                db=self._db,
             ) or {}
             tokens = result.get("tokens_used", 0)
             model = result.get("model_used", "")
@@ -188,8 +225,8 @@ class AgentDispatcher:
             summary_text = (result or {}).get("summary", "")
 
             if self._metrics_store:
-                from shared.metrics import AgentRunRecord
-                self._metrics_store.record(AgentRunRecord(
+                from shared.metrics import AgentRunRecord, HybridMetricsStore
+                run_record = AgentRunRecord(
                     agent_role=str(agent_role),
                     issue_id=task.issue_id,
                     tokens_used=tokens,
@@ -199,7 +236,11 @@ class AgentDispatcher:
                     error_message=error_msg,
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     summary=summary_text[:200],
-                ))
+                )
+                if isinstance(self._metrics_store, HybridMetricsStore):
+                    await self._metrics_store.record_async(run_record)
+                else:
+                    self._metrics_store.record(run_record)
 
             # Learning capture: record noteworthy events
             if self._config_manager and (not success or tokens > 5000):

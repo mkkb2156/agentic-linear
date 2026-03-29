@@ -156,3 +156,37 @@ class MetricsStore:
             "avg_duration_ms": total_duration / total if total else 0.0,
             "estimated_cost_usd": round(cost, 4),
         }
+
+
+class HybridMetricsStore(MetricsStore):
+    """MetricsStore that writes to both in-memory and PostgreSQL.
+
+    Falls back to in-memory only if DB is unavailable.
+    """
+
+    def __init__(
+        self,
+        db: Any = None,
+        flush_path: Path | None = None,
+        flush_every: int = 10,
+    ) -> None:
+        super().__init__(flush_path=flush_path, flush_every=flush_every)
+        self._db = db
+
+    async def record_async(self, run: AgentRunRecord) -> None:
+        """Record a run to both in-memory store and PostgreSQL."""
+        self.record(run)  # In-memory + JSON flush
+        if self._db:
+            try:
+                await self._db.insert_run(
+                    agent_role=run.agent_role,
+                    issue_id=run.issue_id,
+                    tokens_used=run.tokens_used,
+                    model_used=run.model_used,
+                    duration_ms=run.duration_ms,
+                    success=run.success,
+                    error_message=run.error_message,
+                    summary=run.summary,
+                )
+            except Exception as e:
+                logger.error("Failed to write metrics to DB: %s", e)

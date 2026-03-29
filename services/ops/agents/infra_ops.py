@@ -49,6 +49,10 @@ async def execute(
     **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process an Infra Ops task."""
-    agent = InfraOps(claude_client, linear_client, discord_notifier)
+    agent = InfraOps(
+        claude_client, linear_client, discord_notifier,
+        state_tracker=kwargs.get("state_tracker"),
+        db=kwargs.get("db"),
+    )
     result = await agent.run(task)
     return result

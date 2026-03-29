@@ -139,6 +139,20 @@ class AgentConfigManager:
         path.write_text(content, encoding="utf-8")
         logger.info("Updated skill: %s", path)
 
+    def delete_skill(self, name: str) -> None:
+        """Delete a skill file."""
+        path = self._dir / "skills" / f"{name}.md"
+        if path.exists():
+            path.unlink()
+            logger.info("Deleted skill: %s", path)
+
+    def get_agent_config(self, role: str) -> dict[str, Any]:
+        """Load agent config as a dict (for API responses)."""
+        config = self.load_agent_config(role)
+        if config:
+            return config.model_dump()
+        return {"role": role, "model": "sonnet", "max_turns": 15, "skills": [], "enabled": True}
+
     # ---- Learning log ----
 
     def append_learning(self, entry: str) -> None:

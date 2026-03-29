@@ -60,6 +60,10 @@ async def execute(
     **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process a System Architect task."""
-    agent = SystemArchitect(claude_client, linear_client, discord_notifier)
+    agent = SystemArchitect(
+        claude_client, linear_client, discord_notifier,
+        state_tracker=kwargs.get("state_tracker"),
+        db=kwargs.get("db"),
+    )
     result = await agent.run(task)
     return result

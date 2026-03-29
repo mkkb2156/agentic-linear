@@ -67,6 +67,10 @@ async def execute(
     **kwargs: Any,
 ) -> dict[str, Any] | None:
     """Process a Product Strategist task."""
-    agent = ProductStrategist(claude_client, linear_client, discord_notifier)
+    agent = ProductStrategist(
+        claude_client, linear_client, discord_notifier,
+        state_tracker=kwargs.get("state_tracker"),
+        db=kwargs.get("db"),
+    )
     result = await agent.run(task)
     return result

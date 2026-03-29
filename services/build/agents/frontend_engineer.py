@@ -86,6 +86,8 @@ async def execute(
         claude_client, linear_client, discord_notifier,
         github_client=kwargs.get("github_client"),
         vercel_client=kwargs.get("vercel_client"),
+        state_tracker=kwargs.get("state_tracker"),
+        db=kwargs.get("db"),
     )
     result = await agent.run(task)
     return result
